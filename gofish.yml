@@ -1,0 +1,210 @@
+cgml_version: 1.2
+meta:
+  name: "Go Fish"
+  author: "Traditional"
+  description: "The goal is to win the most 'books' of four-of-a-kind."
+  players:
+    min: 2
+    max: 5
+
+#imports:
+#  - !include 'https://cgml.io/core-components/v1/standard_deck.yaml'
+#  - !include 'https://cgml.io/core-components/v1/zones.yaml'
+components:
+  component_types:
+    deck_types:
+      standard_52:
+        composition:
+          - type: template
+            template: standard_suits    # Engine or deck definition must supply the logic for this
+            values: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
+        rank_hierarchy: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
+    zone_types:
+      draw_pile:
+        ordering: shuffled
+        visibility:
+          all: count_only
+      player_hand:
+        ordering: unordered
+        visibility:
+          owner: all
+          others: count_only
+      play_pile:
+        ordering: lifo
+        visibility:
+          all: all
+      winnings_pile:
+        ordering: fifo
+        visibility:
+          all: hidden
+      discard_pile:
+        ordering: lifo
+        visibility:
+          all: top_card_only
+      book_area:
+        ordering: unordered
+        visibility:
+          all: all
+
+  decks:
+    main_deck:
+      type: standard_52
+
+  zones:
+    - name: deck
+      type: draw_pile
+      of_deck: main_deck
+    - name: hand
+      type: player_hand
+      per_player: true
+    - name: books
+      type: book_area
+      per_player: true
+
+  variables:
+    - name: book_count
+      per_player: true
+      initial_value: 0
+
+setup:
+  - action: SHUFFLE
+    target: zones.deck
+  - action: DEAL
+    from: zones.deck
+    to: zones.hand
+    count: 5
+
+flow:
+  states:
+    - Playing
+    - GameOver
+  initial_state: Playing
+  player_order: clockwise
+  turn_structure:
+    - Ask
+    - Resolve
+    - CheckForBooks
+
+  transitions:
+    - from: Playing
+      to: GameOver
+      condition:
+        isEqual:
+          - path: zones.deck.card_count
+          - value: 0
+
+  win_condition:
+    description: "The player with the most books when the deck is empty wins."
+    evaluator:
+      max:
+        - path: players.book_count
+
+rules:
+  - id: player_asks_for_card
+    trigger: on.phase.Ask
+    effect:
+      - action: REQUEST_INPUT
+        player: current
+        prompt: "Choose a player to ask."
+        options:
+          type: player
+        filter:
+          not:
+            isEqual:
+              - path: player.id
+              - path: player.current.id
+        store_as: target_player
+      - action: REQUEST_INPUT
+        player: current
+        prompt: "Choose a rank to ask for."
+        options:
+          type: rank
+        filter:
+          distinct:
+            - map:
+                - path: player.current.hand
+                - select: card.rank
+        store_as: target_rank
+
+  - id: request_is_successful
+    trigger: on.phase.Resolve
+    condition:
+      isGreaterThan:
+        - count:
+            - filter:
+                - path: ref:target_player.hand
+                - isEqual:
+                    - path: card.rank
+                    - value: ref:target_rank
+        - value: 0
+    effect:
+      - action: MOVE
+        from: ref:target_player.hand
+        to: player.current.hand
+        filter:
+          isEqual:
+            - path: card.rank
+            - value: ref:target_rank
+      - action: REPEAT_TURN
+
+  - id: request_fails_go_fish
+    trigger: on.phase.Resolve
+    condition:
+      isEqual:
+        - count:
+            - filter:
+                - path: ref:target_player.hand
+                - isEqual:
+                    - path: card.rank
+                    - value: ref:target_rank
+        - value: 0
+    effect:
+      - action: DRAW
+        player: current
+        count: 1
+        store_as: drawn_card
+      - action: REPEAT_TURN
+        condition:
+          isEqual:
+            - path: ref:drawn_card.rank
+            - value: ref:target_rank
+
+  - id: check_for_books
+    trigger: on.phase.CheckForBooks
+    effect:
+      - action: FIND_AND_STORE
+        in: player.current.hand
+        group_by: card.rank
+        having:
+          isEqual:
+            - count: group
+            - value: 4
+        store_as: completed_book_ranks
+      - action: FOR_EACH
+        in: ref:completed_book_ranks
+        do:
+          - action: MOVE
+            from: player.current.hand
+            to: player.current.books
+            filter:
+              isEqual:
+                - path: card.rank
+                - value: ref:item
+          - action: INCREMENT_VARIABLE
+            path: player.current.book_count
+            value: 1
+
+  - id: replenish_hand
+    trigger: on.phase.CheckForBooks
+    condition:
+      isEqual:
+        - path: player.current.hand.card_count
+        - value: 0
+    effect:
+      - action: DRAW
+        player: current
+        from: zones.deck
+        count:
+          min:
+            - value: 5
+            - path: zones.deck.card_count
