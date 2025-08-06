@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./cgml.schema.json
 cgml_version: 1.2
 meta:
   name: "Go Fish"

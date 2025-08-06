@@ -218,3 +218,13 @@ def load_cgml_file(file_path: str) -> Optional[CgmlDefinition]:
         return None
 
 # Optionally add further utilities/methods as needed.
+
+if __name__ == "__main__":
+    import json
+
+    # Generate the JSON schema for the top-level CgmlDefinition model
+    schema = CgmlDefinition.model_json_schema()  # For Pydantic v2+
+    # If using Pydantic v1.x, use: schema = CgmlDefinition.schema()
+
+    with open("../cgml.schema.json", "w") as f:
+        json.dump(schema, f, indent=2)
