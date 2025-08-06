@@ -1,5 +1,6 @@
 from typing import Any, Dict, Callable, List, Union, Optional
-import operator
+
+from src.loader import Condition, Operand, EffectAction
 
 def resolve_path(obj: Any, path: str) -> Any:
     """
@@ -49,101 +50,145 @@ class RulesEngine:
         """
         self.actions = action_registry
 
-    def evaluate_condition(self, cond: Union[Dict, Any], game_state: Any, context: Dict[str, Any]=None) -> bool:
-        """Recursively evaluate a structured condition node."""
+    def evaluate_condition(
+        self,
+        cond: Union[Condition, Dict, Any],
+        game_state: Any,
+        context: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Recursively evaluates a Condition (pydantic model or dict node).
+        """
         context = context or {}
 
-        if not isinstance(cond, dict):
+        if not isinstance(cond, (Condition, dict)):
             return bool(cond)
 
-        for key, value in cond.items():
-            if key == "isEqual":
-                left_val = self.resolve_operand(value[0], game_state, context)
-                right_val = self.resolve_operand(value[1], game_state, context)
-                return left_val == right_val
-            elif key == "isGreaterThan":
-                left_val = self.resolve_operand(value[0], game_state, context)
-                right_val = self.resolve_operand(value[1], game_state, context)
-                return left_val > right_val
-            elif key == "isLessThan":
-                left_val = self.resolve_operand(value[0], game_state, context)
-                right_val = self.resolve_operand(value[1], game_state, context)
-                return left_val < right_val
-            elif key == "and":
-                return all(self.evaluate_condition(sub, game_state, context) for sub in value)
-            elif key == "or":
-                return any(self.evaluate_condition(sub, game_state, context) for sub in value)
-            elif key == "not":
-                return not self.evaluate_condition(value, game_state, context)
-            elif key == "max":
-                # Value is list of operands (often a path for each player)
-                vals = [self.resolve_operand(x, game_state, context) for x in value]
+        if isinstance(cond, dict):
+            cond = Condition.parse_obj(cond)
+
+        if cond.isEqual is not None:
+            left = self.resolve_operand(cond.isEqual[0], game_state, context)
+            right = self.resolve_operand(cond.isEqual[1], game_state, context)
+            return left == right
+        if cond.isGreaterThan is not None:
+            left = self.resolve_operand(cond.isGreaterThan[0], game_state, context)
+            right = self.resolve_operand(cond.isGreaterThan[1], game_state, context)
+            return left > right
+        if cond.isLessThan is not None:
+            left = self.resolve_operand(cond.isLessThan[0], game_state, context)
+            right = self.resolve_operand(cond.isLessThan[1], game_state, context)
+            return left < right
+        if getattr(cond, "and_", None) is not None:
+            return all(self.evaluate_condition(sub, game_state, context) for sub in cond.and_)
+        if getattr(cond, "or_", None) is not None:
+            return any(self.evaluate_condition(sub, game_state, context) for sub in cond.or_)
+        if getattr(cond, "not_", None) is not None:
+            return not self.evaluate_condition(cond.not_, game_state, context)
+        # Optionally handle max_, min_, count, etc
+        if getattr(cond, "max_", None) is not None:
+            vals = [self.resolve_operand(x, game_state, context) for x in cond.max_]
+            return max(vals)
+        if getattr(cond, "min_", None) is not None:
+            vals = [self.resolve_operand(x, game_state, context) for x in cond.min_]
+            return min(vals)
+        if getattr(cond, "sum_", None) is not None:
+            vals = [self.resolve_operand(x, game_state, context) for x in cond.sum_]
+            flat_vals = []
+            for v in vals:
+                if isinstance(v, (list, tuple)):
+                    flat_vals.extend(v)
+                else:
+                    flat_vals.append(v)
+            return sum(flat_vals)
+        if getattr(cond, "count", None) is not None:
+            collection = cond.count
+            if isinstance(collection, list) and len(collection) == 1:
+                # If a filter node, evaluate recursively
+                return len(self.resolve_operand(collection[0], game_state, context))
+            elif isinstance(collection, (list, tuple)):
+                return len(collection)
+            else:
+                return len(collection)
+        if getattr(cond, "value", None) is not None:
+            return cond.value
+        if getattr(cond, "path", None) is not None:
+            return resolve_path(game_state, cond.path)
+        if getattr(cond, "ref", None) is not None:
+            return context.get(cond.ref)
+        return False
+
+    def resolve_operand(
+        self,
+        operand: Union[Operand, Dict, Any],
+        game_state: Any,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Any:
+        """
+        Resolves an operand node: can be Operand model, dict, or value.
+        """
+        context = context or {}
+
+        if isinstance(operand, dict):
+            operand = Operand.parse_obj(operand)
+        if isinstance(operand, Operand):
+            if operand.path is not None:
+                return resolve_path(game_state, operand.path)
+            if operand.value is not None:
+                return operand.value
+            if operand.ref is not None:
+                return context.get(operand.ref)
+            if operand.isEqual is not None:
+                return self.evaluate_condition(Condition(isEqual=operand.isEqual), game_state, context)
+            if operand.isGreaterThan is not None:
+                return self.evaluate_condition(Condition(isGreaterThan=operand.isGreaterThan), game_state, context)
+            if operand.isLessThan is not None:
+                return self.evaluate_condition(Condition(isLessThan=operand.isLessThan), game_state, context)
+            if getattr(operand, "and_", None) is not None:
+                return self.evaluate_condition(Condition(and_=operand.and_), game_state, context)
+            if getattr(operand, "or_", None) is not None:
+                return self.evaluate_condition(Condition(or_=operand.or_), game_state, context)
+            if getattr(operand, "not_", None) is not None:
+                return self.evaluate_condition(Condition(not_=operand.not_), game_state, context)
+            if getattr(operand, "max_", None) is not None:
+                vals = [self.resolve_operand(x, game_state, context) for x in operand.max_]
                 return max(vals)
-            elif key == "min":
-                vals = [self.resolve_operand(x, game_state, context) for x in value]
+            if getattr(operand, "min_", None) is not None:
+                vals = [self.resolve_operand(x, game_state, context) for x in operand.min_]
                 return min(vals)
-            elif key == "count":
-                # Value is usually a collection or a filter
-                collection = value
+            if getattr(operand, "sum_", None) is not None:
+                vals = [self.resolve_operand(x, game_state, context) for x in operand.sum_]
+                # Flatten if any elements are lists, e.g. from card counts across several zones
+                flat_vals = []
+                for v in vals:
+                    if isinstance(v, (list, tuple)):
+                        # If v is a list of numbers (e.g. [card.card_count for some zones])
+                        flat_vals.extend(v)
+                    else:
+                        flat_vals.append(v)
+                return sum(flat_vals)
+            if getattr(operand, "count", None) is not None:
+                collection = operand.count
                 if isinstance(collection, list) and len(collection) == 1:
-                    # If a filter node, evaluate recursively
                     return len(self.resolve_operand(collection[0], game_state, context))
                 elif isinstance(collection, (list, tuple)):
                     return len(collection)
                 else:
                     return len(collection)
-            elif key == "value":
-                return value
-            elif key == "path":
-                # 'value' is the path string
-                return resolve_path(game_state, value)
-            elif key == "ref":
-                # For variables temporarily stored in context during effect handling
-                return context.get(value)
-            else:
-                raise NotImplementedError(f"Unknown condition operator: {key}")
-
-        return False
-
-    def resolve_operand(self, operand, game_state, context):
-        """Resolves an operand node: can be {path:...}, {value:...}, or literal."""
-        if isinstance(operand, dict):
-            # If has a single key recognized operand
-            if "value" in operand:
-                return operand["value"]
-            if "path" in operand:
-                return resolve_path(game_state, operand["path"])
-            if "ref" in operand:
-                return context.get(operand["ref"])
-            # allow recursive conditions
-            for k in ["isEqual", "isGreaterThan", "isLessThan", "and", "or", "not", "max", "min", "count"]:
-                if k in operand:
-                    return self.evaluate_condition({k: operand[k]}, game_state, context)
-            # e.g. for a filter expression or map/distinct/group_by, not implemented here.
         return operand
 
-    def execute_effect(self, effect_list: List[Dict[str, Any]], game_state: Any, context: Dict[str, Any]=None):
-        """Executes actions (effects) as specified in a Rule."""
+    def execute_effect(self, effect_list: List[EffectAction], game_state: Any, context: Optional[Dict[str, Any]] = None):
+        """
+        Expects a list of EffectAction models (not dicts).
+        """
         context = context or {}
         for action_def in effect_list:
+            if isinstance(action_def, dict):
+                action_def = EffectAction.parse_obj(action_def)
             action_name = action_def.action
             action_func = self.actions.get(action_name)
             if action_func:
-                # Remove extra meta keys reserved for CGML, except for function kwargs
-                params = {k:v for k,v in action_def.__dict__.items() if k != 'action'}
-                # Pass game_state and params, plus context (could be used for storing/referencing temporary results)
+                params = action_def.dict(exclude={"action"}, exclude_none=True)
                 action_func(game_state, context=context, **params)
             else:
                 print(f"Action not implemented: {action_name}")
-
-# --- Example action registry usage ---
-
-# def my_move_action(game_state, from_, to, count=1, **kwargs):
-#     ... actually move cards ...
-
-# action_registry = {
-#     "MOVE": my_move_action,
-#     "SHUFFLE": my_shuffle_action,
-#     # etc.
-# }
-# engine = RulesEngine(action_registry)

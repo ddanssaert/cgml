@@ -92,6 +92,7 @@ class Operand(BaseModel):
     all_: Optional[List["Operand"]] = Field(None, alias="all")
     max_: Optional[List["Operand"]] = Field(None, alias="max")
     min_: Optional[List["Operand"]] = Field(None, alias="min")
+    sum_: Optional[List["Operand"]] = Field(None, alias="sum")
     count: Optional[List["Operand"]] = None
     # For filters/maps/group_by/etc
     distinct: Optional[List["Operand"]] = None
@@ -122,6 +123,7 @@ class Condition(BaseModel):
     all_: Optional[List["Condition"]] = Field(None, alias="all")
     max_: Optional[List[Operand]] = Field(None, alias="max")
     min_: Optional[List[Operand]] = Field(None, alias="min")
+    sum_: Optional[List[Operand]] = Field(None, alias="sum")
     count: Optional[List[Operand]] = None
     filter: Optional[List["Condition"]] = None
 
@@ -142,11 +144,14 @@ class Transition(BaseModel):
     to: str
     condition: Optional[Condition] = None
 
+class StateDef(BaseModel):
+    phases: Optional[List[str]] = None
+    meta: Optional[Dict[str, Any]] = None
+
 class Flow(BaseModel):
-    states: List[str]
+    states: Dict[str, StateDef]  # <-- changed from List[str] to Dict[str, StateDef]
     initial_state: str
     player_order: str  # 'clockwise', 'counterclockwise', 'simultaneous'
-    turn_structure: Optional[List[str]] = None
     transitions: Optional[List[Transition]] = []
     win_condition: Optional[Dict[str, Any]] = None
     meta: Optional[Dict[str, Any]] = None
@@ -167,6 +172,7 @@ class EffectAction(BaseModel):
     prompt: Optional[str] = None
     store_as: Optional[str] = None
     condition: Optional[Any] = None
+    state: Optional[str] = None
 
     class Config:
         extra = "allow"

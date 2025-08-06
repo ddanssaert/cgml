@@ -16,9 +16,9 @@ components:
       standard_52:
         composition:
           - type: template
-            template: standard_suits    # Engine or deck definition must supply the logic for this
-            values: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
-        rank_hierarchy: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
+            template: standard_suits
+            values: [2,3,4,5,6,7,8,9,10]
+        rank_hierarchy: [2,3,4,5,6,7,8,9,10]
     zone_types:
       draw_pile:
         ordering: shuffled
@@ -69,19 +69,18 @@ setup:
     target: zones.deck
   - action: DEAL_ALL
     from_deck: main_deck
-    to: zones.player_deck
+    to: zones.zones.player_deck
 
 flow:
   states:
-    - Playing
-    - War
-    - GameOver
+    Playing:
+      phases: [Replenish1, Replenish2, FlipCard, Compare]
+    War:
+      phases: [Replenish1, Replenish2, BeginWar, WarCompare]
+    GameOver:
+      phases: []
   initial_state: Playing
   player_order: simultaneous
-  turn_structure:
-    - FlipCard
-    - Compare
-    - Collect
 
   transitions:
     - from: Playing
@@ -89,68 +88,190 @@ flow:
       condition:
         or:
           - isEqual:
-              - path: player.0.player_deck.card_count
+              - sum:
+                  - path: players.0.zones.player_deck.card_count
+                  - path: players.0.zones.winnings.card_count
+                  - path: players.0.zones.play_area.card_count
               - value: 0
           - isEqual:
-              - path: player.1.player_deck.card_count
+              - sum:
+                  - path: players.1.zones.player_deck.card_count
+                  - path: players.1.zones.winnings.card_count
+                  - path: players.1.zones.play_area.card_count
               - value: 0
+    - from: War
+      to: GameOver
+      condition:
+        or:
+          - isLessThan:
+              - sum:
+                  - path: players.0.zones.player_deck.card_count
+                  - path: players.0.zones.winnings.card_count
+                  - path: players.0.zones.play_area.card_count
+              - value: 4
+          - isLessThan:
+              - sum:
+                  - path: players.1.zones.player_deck.card_count
+                  - path: players.1.zones.winnings.card_count
+                  - path: players.1.zones.play_area.card_count
+              - value: 4
 
   win_condition:
-    description: "A player wins when they have all 52 cards."
     evaluator:
       max:
-        - path:
-            - player.0.player_deck.card_count
-            - player.0.winnings.card_count
-        # Optionally, for both players
-
+        - add:
+            - path: players.0.zones.player_deck.card_count
+            - path: players.0.zones.winnings.card_count
+        - add:
+            - path: players.1.zones.player_deck.card_count
+            - path: players.1.zones.winnings.card_count
 rules:
   - id: flip_cards
     trigger: on.phase.FlipCard
     effect:
       - action: MOVE
-        from: player.0.player_deck
-        to: player.0.play_area
+        from: players.0.zones.player_deck
+        to: players.0.zones.play_area
         count: 1
       - action: MOVE
-        from: player.1.player_deck
-        to: player.1.play_area
+        from: players.1.zones.player_deck
+        to: players.1.zones.play_area
         count: 1
 
   - id: compare_cards_p1_wins
     trigger: on.phase.Compare
     condition:
       isGreaterThan:
-        - path: player.0.play_area.top_card.rank
-        - path: player.1.play_area.top_card.rank
+        - path: players.0.zones.play_area.top_card.properties.rank
+        - path: players.1.zones.play_area.top_card.properties.rank
     effect:
       - action: MOVE
-        from: player.0.play_area
-        to: player.0.winnings
+        from: players.0.zones.play_area
+        to: players.0.zones.winnings
+        count: 1
       - action: MOVE
-        from: player.1.play_area
-        to: player.0.winnings
+        from: players.1.zones.play_area
+        to: players.0.zones.winnings
+        count: 1
 
   - id: compare_cards_p2_wins
     trigger: on.phase.Compare
     condition:
       isGreaterThan:
-        - path: player.1.play_area.top_card.rank
-        - path: player.0.play_area.top_card.rank
+        - path: players.1.zones.play_area.top_card.properties.rank
+        - path: players.0.zones.play_area.top_card.properties.rank
     effect:
       - action: MOVE
-        from: player.0.play_area
-        to: player.1.winnings
+        from: players.0.zones.play_area
+        to: players.1.zones.winnings
+        count: 1
       - action: MOVE
-        from: player.1.play_area
-        to: player.1.winnings
+        from: players.1.zones.play_area
+        to: players.1.zones.winnings
+        count: 1
 
   - id: compare_cards_tie
     trigger: on.phase.Compare
     condition:
       isEqual:
-        - path: player.0.play_area.top_card.rank
-        - path: player.1.play_area.top_card.rank
+        - path: players.0.zones.play_area.top_card.properties.rank
+        - path: players.1.zones.play_area.top_card.properties.rank
     effect:
       - action: SET_GAME_STATE
         state: War
+
+  - id: begin_war
+    trigger: on.phase.BeginWar
+    effect:
+      - action: MOVE
+        from: players.0.zones.player_deck
+        to: players.0.zones.play_area
+        count: 3
+      - action: MOVE
+        from: players.1.zones.player_deck
+        to: players.1.zones.play_area
+        count: 3
+      - action: MOVE
+        from: players.0.zones.player_deck
+        to: players.0.zones.play_area
+        count: 1
+      - action: MOVE
+        from: players.1.zones.player_deck
+        to: players.1.zones.play_area
+        count: 1
+
+  - id: war_compare_p1_win
+    trigger: on.phase.WarCompare
+    condition:
+      isGreaterThan:
+        - path: players.0.zones.play_area.top_card.properties.rank
+        - path: players.1.zones.play_area.top_card.properties.rank
+    effect:
+      - action: MOVE_ALL
+        from: players.0.zones.play_area
+        to: players.0.zones.winnings
+      - action: MOVE_ALL
+        from: players.1.zones.play_area
+        to: players.0.zones.winnings
+      - action: SET_GAME_STATE
+        state: Playing
+
+  - id: war_compare_p2_win
+    trigger: on.phase.WarCompare
+    condition:
+      isGreaterThan:
+        - path: players.1.zones.play_area.top_card.properties.rank
+        - path: players.0.zones.play_area.top_card.properties.rank
+    effect:
+      - action: MOVE_ALL
+        from: players.0.zones.play_area
+        to: players.1.zones.winnings
+      - action: MOVE_ALL
+        from: players.1.zones.play_area
+        to: players.1.zones.winnings
+      - action: SET_GAME_STATE
+        state: Playing
+
+  - id: war_compare_tie
+    trigger: on.phase.WarCompare
+    condition:
+      isEqual:
+        - path: players.0.zones.play_area.top_card.properties.rank
+        - path: players.1.zones.play_area.top_card.properties.rank
+    effect:
+      - action: SET_GAME_STATE
+        state: War     # Repeats the war sequence
+
+  - id: replenish_deck_from_winnings_p1_replenish
+    trigger: on.phase.Replenish1
+    condition:
+      and:
+        - isEqual:
+            - path: players.0.zones.player_deck.card_count
+            - value: 0
+        - isGreaterThan:
+            - path: players.0.zones.winnings.card_count
+            - value: 0
+    effect:
+      - action: MOVE_ALL
+        from: players.0.zones.winnings
+        to: players.0.zones.player_deck
+      - action: SHUFFLE
+        target: players.0.zones.player_deck
+
+  - id: replenish_deck_from_winnings_p2_replenish
+    trigger: on.phase.Replenish2
+    condition:
+      and:
+        - isEqual:
+            - path: players.1.zones.player_deck.card_count
+            - value: 0
+        - isGreaterThan:
+            - path: players.1.zones.winnings.card_count
+            - value: 0
+    effect:
+      - action: MOVE_ALL
+        from: players.1.zones.winnings
+        to: players.1.zones.player_deck
+      - action: SHUFFLE
+        target: players.1.zones.player_deck

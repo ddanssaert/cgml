@@ -19,6 +19,18 @@ class Zone:
     visibility: Optional[Dict[str, str]] = None
     cards: List[Card] = field(default_factory=list)
 
+    @property
+    def card_count(self) -> int:
+        """Returns the number of cards currently in this zone."""
+        return len(self.cards)
+
+    @property
+    def top_card(self) -> Optional['Card']:
+        """Returns the top card in this zone (last if LIFO/FIFO, first if empty), or None if zone is empty."""
+        if not self.cards:
+            return None
+        return self.cards[-1]
+
 @dataclass
 class Player:
     id: int
@@ -121,46 +133,57 @@ def build_game_state_from_cgml(cgml: Any, player_count: int = None) -> GameState
 
 def find_zone(state: GameState, zone_path: str, player: Player = None) -> Zone:
     """
-    Resolve a zone path string to a Zone object.
-    Supports:
-        - "zones.<zone_name>"    (shared or per-player, disambiguation by 'player' param)
-        - "<zone_name>"          (same as above)
-        - "player.<idx>.<zone_name>" (explicit per-player zone)
+    Resolves a dot-path to a Zone object within the GameState.
+    - Supports: 'players.0.zones.discard', 'player.1.winnings', 'zones.deck', 'deck'
+    - Raises ValueError if the resolved object is not a Zone.
+
+    If player is given and 'zone_path' is a single zone name, looks up in player.zones first.
     """
-    if zone_path.startswith("player."):
-        parts = zone_path.split('.')
-        if len(parts) >= 3:
-            p_idx = int(parts[1])
-            z_name = parts[2]
-            if 0 <= p_idx < len(state.players):
-                return state.players[p_idx].zones[z_name]
-            else:
-                raise IndexError(f"Player index {p_idx} out of range in zone_path: {zone_path}")
-        else:
-            raise ValueError(f"Invalid player zone path: {zone_path}")
-
-    if zone_path.startswith('zones.'):
-        zone_name = zone_path.split('.', 1)[1]
-        if player and zone_name in player.zones:
-            return player.zones[zone_name]
-        elif zone_name in state.shared_zones:
-            return state.shared_zones[zone_name]
-        # fallback to any player's zone
+    # Shortcut: if just a single word, use player zone/then shared
+    if '.' not in zone_path:
+        if player and zone_path in player.zones:
+            return player.zones[zone_path]
+        if zone_path in state.shared_zones:
+            return state.shared_zones[zone_path]
         for p in state.players:
-            if zone_name in p.zones:
-                return p.zones[zone_name]
+            if zone_path in p.zones:
+                return p.zones[zone_path]
+        raise ValueError(f"Zone '{zone_path}' not found.")
 
-    # Direct per-player zone by param
-    if player and zone_path in player.zones:
-        return player.zones[zone_path]
-    # Or shared zone
-    if zone_path in state.shared_zones:
-        return state.shared_zones[zone_path]
-    # Final fallback: per-player
-    for p in state.players:
-        if zone_path in p.zones:
-            return p.zones[zone_path]
-    raise ValueError(f"Zone '{zone_path}' not found")
+    # Build starting context
+    ctx = {
+        "players": state.players,
+        "zones": state.shared_zones,
+        "shared_zones": state.shared_zones,
+    }
+    if player:
+        ctx["player"] = player
+
+    current = ctx
+    for part in zone_path.split('.'):
+        # If list, try integer index
+        if isinstance(current, list):
+            try:
+                idx = int(part)
+                current = current[idx]
+            except Exception:
+                raise KeyError(f"Cannot index list with '{part}'")
+        # If dict, use key
+        elif isinstance(current, dict):
+            if part in current:
+                current = current[part]
+            else:
+                raise KeyError(f"Key '{part}' not found.")
+        # If dataclass/object, use attribute
+        elif hasattr(current, part):
+            current = getattr(current, part)
+        else:
+            raise KeyError(f"Cannot resolve part '{part}' in object {current}")
+
+    # Final check: ensure this is a Zone
+    if not isinstance(current, Zone):
+        raise ValueError(f"Path '{zone_path}' does not resolve to a Zone (got {type(current).__name__})")
+    return current
 
 def shuffle_zone(zone: Zone):
     random.shuffle(zone.cards)
