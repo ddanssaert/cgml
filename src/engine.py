@@ -43,12 +43,49 @@ def resolve_path(obj: Any, path: str) -> Any:
                 raise AttributeError(f"Cannot resolve '{part}' in path '{path}' on {repr(current)}")
     return current
 
+def get_rank_index(cgml_definition, deck_type_name, rank_value):
+    """Looks up the numeric index of a rank in the deck's rank_hierarchy."""
+    rank_hierarchy = cgml_definition.components.component_types['deck_types'][deck_type_name].rank_hierarchy
+    # Use str() to handle YAML typing quirks: '2' might be int or str!
+    try:
+        return [str(x) for x in rank_hierarchy].index(str(rank_value))
+    except ValueError:
+        raise ValueError(f"Rank '{rank_value}' not found in rank_hierarchy: {rank_hierarchy}")
+
 class RulesEngine:
     def __init__(self, action_registry: Dict[str, Callable]):
         """
         :param action_registry: Mapping action_name => callable(game_state, **params)
         """
         self.actions = action_registry
+
+    def _maybe_compare_ranks(self, left, right, game_state):
+        """
+        If both left and right look like card rank values, and game defines hierarchy, return indices for comparison.
+        Otherwise, return original values.
+        """
+        # Try to determine deck_type context:
+        cgml_def = getattr(game_state, "cgml_definition", None)
+        if cgml_def is None:
+            return left, right  # fallback: vanilla
+
+        # Try to extract deck_type (assume 1 deck_type if only one, otherwise fail gracefully)
+        try:
+            deck_types = cgml_def.components.component_types.get('deck_types', {})
+            if not deck_types:
+                return left, right
+            # Use the first deck_type found unless there's a better way (expand for multi-deck games!)
+            deck_type_name = next(iter(deck_types))
+            # Check if both are in rank_hierarchy
+            rank_hierarchy = [str(x) for x in deck_types[deck_type_name].rank_hierarchy]
+
+            if str(left) in rank_hierarchy and str(right) in rank_hierarchy:
+                left = rank_hierarchy.index(str(left))
+                right = rank_hierarchy.index(str(right))
+        except Exception:
+            pass  # fallback to default comparison
+
+        return left, right
 
     def evaluate_condition(
         self,
@@ -70,14 +107,17 @@ class RulesEngine:
         if cond.isEqual is not None:
             left = self.resolve_operand(cond.isEqual[0], game_state, context)
             right = self.resolve_operand(cond.isEqual[1], game_state, context)
+            left, right = self._maybe_compare_ranks(left, right, game_state)
             return left == right
         if cond.isGreaterThan is not None:
             left = self.resolve_operand(cond.isGreaterThan[0], game_state, context)
             right = self.resolve_operand(cond.isGreaterThan[1], game_state, context)
+            left, right = self._maybe_compare_ranks(left, right, game_state)
             return left > right
         if cond.isLessThan is not None:
             left = self.resolve_operand(cond.isLessThan[0], game_state, context)
             right = self.resolve_operand(cond.isLessThan[1], game_state, context)
+            left, right = self._maybe_compare_ranks(left, right, game_state)
             return left < right
         if getattr(cond, "and_", None) is not None:
             return all(self.evaluate_condition(sub, game_state, context) for sub in cond.and_)
