@@ -8,16 +8,13 @@ meta:
     min: 2
     max: 5
 
-#imports:
-#  - !include 'https://cgml.io/core-components/v1/standard_deck.yaml'
-#  - !include 'https://cgml.io/core-components/v1/zones.yaml'
 components:
   component_types:
     deck_types:
       standard_52:
         composition:
           - type: template
-            template: standard_suits    # Engine or deck definition must supply the logic for this
+            template: standard_suits
             values: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
         rank_hierarchy: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
     zone_types:
@@ -30,18 +27,6 @@ components:
         visibility:
           owner: all
           others: count_only
-      play_pile:
-        ordering: lifo
-        visibility:
-          all: all
-      winnings_pile:
-        ordering: fifo
-        visibility:
-          all: hidden
-      discard_pile:
-        ordering: lifo
-        visibility:
-          all: top_card_only
       book_area:
         ordering: unordered
         visibility:
@@ -77,14 +62,12 @@ setup:
 
 flow:
   states:
-    - Playing
-    - GameOver
+    Playing:
+      phases: [Ask, Resolve, CheckForBooks]
+    GameOver:
+      phases: []
   initial_state: Playing
   player_order: clockwise
-  turn_structure:
-    - Ask
-    - Resolve
-    - CheckForBooks
 
   transitions:
     - from: Playing
