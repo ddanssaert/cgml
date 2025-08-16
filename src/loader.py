@@ -56,22 +56,20 @@ class Components(BaseModel):
 class Action(BaseModel):
     action: str
     # Flexible: allow arbitrary keys
-    # Use field spec here or simply store 'params'
     params: Optional[Dict[str, Any]] = None
     # For atomic fields (common actions)
-    from_: Optional[str] = Field(None, alias="from")
+    from_: Optional[Any] = Field(None, alias="from")
     from_deck: Optional[str] = None
-    to: Optional[str] = None
-    target: Optional[str] = None
-    count: Optional[Union[int, Dict[str, Any]]] = None
-    filter: Optional[Any] = None  # Used for filter expressions
-    player: Optional[str] = None
+    to: Optional[Any] = None
+    target: Optional[Any] = None
+    player: Optional[Any] = None
     prompt: Optional[str] = None
     store_as: Optional[str] = None
     value: Optional[Any] = None
     condition: Optional[Any] = None
 
-    # more specific fields as you encounter more actions...
+    class Config:
+        extra = "allow"
 
 # --- Condition & Expression System (Recursive) --- #
 
@@ -101,6 +99,13 @@ class Operand(BaseModel):
     group_by: Optional[Any] = None  # Groupings for forEach/books, etc
     having: Optional[Any] = None
 
+    # v1.3 operators (selective support for this project)
+    rank_value: Optional[List["Operand"]] = None
+    top: Optional[List["Operand"]] = None
+    all_items: Optional[List["Operand"]] = Field(None, alias="all")
+    add: Optional[List["Operand"]] = None
+    list_: Optional[List["Operand"]] = Field(None, alias="list")
+
     def is_leaf(self) -> bool:
         '''Returns True if this is a terminal (path or value).'''
         return (self.path is not None or self.value is not None or self.ref is not None)
@@ -110,7 +115,6 @@ class Operand(BaseModel):
         arbitrary_types_allowed = True
 
 Operand.update_forward_refs()
-
 class Condition(BaseModel):
     # Only one key should be set per node, but we allow all for composition.
     isEqual: Optional[List[Operand]] = None
@@ -138,7 +142,6 @@ class Condition(BaseModel):
 Condition.update_forward_refs()
 
 # ---- Flow (FSM) ---- #
-
 class Transition(BaseModel):
     from_: str = Field(..., alias="from")
     to: str
@@ -152,7 +155,7 @@ class Flow(BaseModel):
     states: Dict[str, StateDef]  # <-- changed from List[str] to Dict[str, StateDef]
     initial_state: str
     player_order: str  # 'clockwise', 'counterclockwise', 'simultaneous'
-    transitions: Optional[List[Transition]] = []
+    transitions: Optional[List[Transition]] = Field(default_factory=list)
     win_condition: Optional[Dict[str, Any]] = None
     meta: Optional[Dict[str, Any]] = None
 
@@ -162,10 +165,10 @@ class EffectAction(BaseModel):
     action: str
     # Allow arbitrary key/values for extensibility
     params: Optional[Dict[str, Any]] = None
-    from_: Optional[str] = Field(None, alias="from")
-    to: Optional[str] = None
-    player: Optional[str] = None
-    target: Optional[str] = None
+    from_: Optional[Any] = Field(None, alias="from")
+    to: Optional[Any] = None
+    player: Optional[Any] = None
+    target: Optional[Any] = None
     count: Optional[Union[int, Dict[str, Any]]] = None
     filter: Optional[Any] = None
     value: Optional[Any] = None
@@ -195,8 +198,6 @@ class CgmlDefinition(BaseModel):
     setup: List[Action]
     flow: Flow
     rules: List[Rule]
-    meta_: Optional[Dict[str, Any]] = Field(None, alias="meta")  # for extensibility
-
 # ---- Loader ---- #
 
 # Add the !include constructor for PyYAML+yaml_include

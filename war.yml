@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=./cgml.schema.json
-cgml_version: 1.2
+cgml_version: "1.3"
 meta:
   name: "War"
   author: "Traditional"
@@ -67,10 +67,13 @@ components:
 
 setup:
   - action: SHUFFLE
-    target: zones.deck
+    target:
+      path: "$.zones.deck"
   - action: DEAL_ALL
-    from_deck: main_deck
-    to: zones.zones.player_deck
+    from:
+      path: "$.zones.deck"
+    to:
+      path: "$.players[*].zones.player_deck"
 
 flow:
   states:
@@ -90,189 +93,415 @@ flow:
         or:
           - isEqual:
               - sum:
-                  - path: players.0.zones.player_deck.card_count
-                  - path: players.0.zones.winnings.card_count
-                  - path: players.0.zones.play_area.card_count
+                  - count: [ { path: "$.players[0].zones.player_deck" } ]
+                  - count: [ { path: "$.players[0].zones.winnings" } ]
+                  - count: [ { path: "$.players[0].zones.play_area" } ]
               - value: 0
           - isEqual:
               - sum:
-                  - path: players.1.zones.player_deck.card_count
-                  - path: players.1.zones.winnings.card_count
-                  - path: players.1.zones.play_area.card_count
+                  - count: [ { path: "$.players[1].zones.player_deck" } ]
+                  - count: [ { path: "$.players[1].zones.winnings" } ]
+                  - count: [ { path: "$.players[1].zones.play_area" } ]
               - value: 0
+
+    # If a player cannot possibly lay 4 war cards (deck + winnings < 4), exit War back to Playing and award the pot via on.state.exit.War
     - from: War
-      to: GameOver
+      to: Playing
       condition:
         or:
           - isLessThan:
-              - sum:
-                  - path: players.0.zones.player_deck.card_count
-                  - path: players.0.zones.winnings.card_count
-                  - path: players.0.zones.play_area.card_count
+              - add:
+                  - count: [ { path: "$.players[0].zones.player_deck" } ]
+                  - count: [ { path: "$.players[0].zones.winnings" } ]
               - value: 4
           - isLessThan:
-              - sum:
-                  - path: players.1.zones.player_deck.card_count
-                  - path: players.1.zones.winnings.card_count
-                  - path: players.1.zones.play_area.card_count
+              - add:
+                  - count: [ { path: "$.players[1].zones.player_deck" } ]
+                  - count: [ { path: "$.players[1].zones.winnings" } ]
               - value: 4
 
   win_condition:
     evaluator:
       max:
-        - add:
-            - path: players.0.zones.player_deck.card_count
-            - path: players.0.zones.winnings.card_count
-        - add:
-            - path: players.1.zones.player_deck.card_count
-            - path: players.1.zones.winnings.card_count
+        - list:
+            - add:
+                - count: [ { path: "$.players[0].zones.player_deck" } ]
+                - count: [ { path: "$.players[0].zones.winnings" } ]
+            - add:
+                - count: [ { path: "$.players[1].zones.player_deck" } ]
+                - count: [ { path: "$.players[1].zones.winnings" } ]
+
 rules:
   - id: flip_cards
     trigger: on.phase.FlipCard
     effect:
-      - action: MOVE
-        from: players.0.zones.player_deck
-        to: players.0.zones.play_area
-        count: 1
-      - action: MOVE
-        from: players.1.zones.player_deck
-        to: players.1.zones.play_area
-        count: 1
+      - action: FOR_EACH_PLAYER
+        order: simultaneous
+        players:
+          path: "$.players[*]"
+        do:
+          - action: MOVE
+            from:
+              top:
+                - path: "$.players[$player].zones.player_deck"
+            to:
+              path: "$.players[$player].zones.play_area"
 
   - id: compare_cards_p1_wins
     trigger: on.phase.Compare
     condition:
-      isGreaterThan:
-        - path: players.0.zones.play_area.top_card.properties.rank
-        - path: players.1.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
     effect:
-      - action: MOVE
-        from: players.0.zones.play_area
-        to: players.0.zones.winnings
-        count: 1
-      - action: MOVE
-        from: players.1.zones.play_area
-        to: players.0.zones.winnings
-        count: 1
+      - action: MOVE_ALL
+        from:
+          path: "$.players[0].zones.play_area"
+        to:
+          path: "$.players[0].zones.winnings"
+      - action: MOVE_ALL
+        from:
+          path: "$.players[1].zones.play_area"
+        to:
+          path: "$.players[0].zones.winnings"
 
   - id: compare_cards_p2_wins
     trigger: on.phase.Compare
     condition:
-      isGreaterThan:
-        - path: players.1.zones.play_area.top_card.properties.rank
-        - path: players.0.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
     effect:
-      - action: MOVE
-        from: players.0.zones.play_area
-        to: players.1.zones.winnings
-        count: 1
-      - action: MOVE
-        from: players.1.zones.play_area
-        to: players.1.zones.winnings
-        count: 1
+      - action: MOVE_ALL
+        from:
+          path: "$.players[0].zones.play_area"
+        to:
+          path: "$.players[1].zones.winnings"
+      - action: MOVE_ALL
+        from:
+          path: "$.players[1].zones.play_area"
+        to:
+          path: "$.players[1].zones.winnings"
 
   - id: compare_cards_tie
     trigger: on.phase.Compare
     condition:
-      isEqual:
-        - path: players.0.zones.play_area.top_card.properties.rank
-        - path: players.1.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isEqual:
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
     effect:
-      - action: SET_GAME_STATE
+      # Enter War loop (Replenish -> BeginWar -> WarCompare)
+      - action: SET_STATE
         state: War
 
+  # Replenish before wars or normal play whenever deck < 4 and winnings > 0
+  - id: replenish_anytime_p1
+    trigger: on.phase.Replenish1
+    condition:
+      and:
+        - isLessThan:
+            - count: [ { path: "$.players[0].zones.player_deck" } ]
+            - value: 4
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.winnings" } ]
+            - value: 0
+    effect:
+      - action: MOVE_ALL
+        from:
+          path: "$.players[0].zones.winnings"
+        to:
+          path: "$.players[0].zones.player_deck"
+      - action: SHUFFLE
+        target:
+          path: "$.players[0].zones.player_deck"
+
+  - id: replenish_anytime_p2
+    trigger: on.phase.Replenish2
+    condition:
+      and:
+        - isLessThan:
+            - count: [ { path: "$.players[1].zones.player_deck" } ]
+            - value: 4
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.winnings" } ]
+            - value: 0
+    effect:
+      - action: MOVE_ALL
+        from:
+          path: "$.players[1].zones.winnings"
+        to:
+          path: "$.players[1].zones.player_deck"
+      - action: SHUFFLE
+        target:
+          path: "$.players[1].zones.player_deck"
+
+  # Lay down war cards only when both players have at least 4 cards in deck (after replenish)
   - id: begin_war
     trigger: on.phase.BeginWar
+    condition:
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.player_deck" } ]
+            - value: 3
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.player_deck" } ]
+            - value: 3
     effect:
       - action: MOVE
-        from: players.0.zones.player_deck
-        to: players.0.zones.play_area
+        from:
+          path: "$.players[0].zones.player_deck"
+        to:
+          path: "$.players[0].zones.play_area"
         count: 3
       - action: MOVE
-        from: players.1.zones.player_deck
-        to: players.1.zones.play_area
+        from:
+          path: "$.players[1].zones.player_deck"
+        to:
+          path: "$.players[1].zones.play_area"
         count: 3
       - action: MOVE
-        from: players.0.zones.player_deck
-        to: players.0.zones.play_area
+        from:
+          path: "$.players[0].zones.player_deck"
+        to:
+          path: "$.players[0].zones.play_area"
         count: 1
       - action: MOVE
-        from: players.1.zones.player_deck
-        to: players.1.zones.play_area
+        from:
+          path: "$.players[1].zones.player_deck"
+        to:
+          path: "$.players[1].zones.play_area"
         count: 1
 
   - id: war_compare_p1_win
     trigger: on.phase.WarCompare
     condition:
-      isGreaterThan:
-        - path: players.0.zones.play_area.top_card.properties.rank
-        - path: players.1.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
     effect:
       - action: MOVE_ALL
-        from: players.0.zones.play_area
-        to: players.0.zones.winnings
+        from:
+          path: "$.players[0].zones.play_area"
+        to:
+          path: "$.players[0].zones.winnings"
       - action: MOVE_ALL
-        from: players.1.zones.play_area
-        to: players.0.zones.winnings
-      - action: SET_GAME_STATE
+        from:
+          path: "$.players[1].zones.play_area"
+        to:
+          path: "$.players[0].zones.winnings"
+      - action: SET_STATE
         state: Playing
 
   - id: war_compare_p2_win
     trigger: on.phase.WarCompare
     condition:
-      isGreaterThan:
-        - path: players.1.zones.play_area.top_card.properties.rank
-        - path: players.0.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
     effect:
       - action: MOVE_ALL
-        from: players.0.zones.play_area
-        to: players.1.zones.winnings
+        from:
+          path: "$.players[0].zones.play_area"
+        to:
+          path: "$.players[1].zones.winnings"
       - action: MOVE_ALL
-        from: players.1.zones.play_area
-        to: players.1.zones.winnings
-      - action: SET_GAME_STATE
+        from:
+          path: "$.players[1].zones.play_area"
+        to:
+          path: "$.players[1].zones.winnings"
+      - action: SET_STATE
         state: Playing
 
   - id: war_compare_tie
     trigger: on.phase.WarCompare
     condition:
-      isEqual:
-        - path: players.0.zones.play_area.top_card.properties.rank
-        - path: players.1.zones.play_area.top_card.properties.rank
+      and:
+        - isGreaterThan:
+            - count: [ { path: "$.players[0].zones.play_area" } ]
+            - value: 0
+        - isGreaterThan:
+            - count: [ { path: "$.players[1].zones.play_area" } ]
+            - value: 0
+        - isEqual:
+            - rank_value:
+                - top:
+                    - path: "$.players[0].zones.play_area"
+            - rank_value:
+                - top:
+                    - path: "$.players[1].zones.play_area"
     effect:
-      - action: SET_GAME_STATE
+      - action: SET_STATE
         state: War     # Repeats the war sequence
 
-  - id: replenish_deck_from_winnings_p1_replenish
-    trigger: on.phase.Replenish1
+  # Cleanup/award the pot when exiting War due to shortage (cannot muster 4)
+  - id: war_cleanup_award_pot_on_shortage
+    trigger: on.state.exit.War
     condition:
-      and:
-        - isEqual:
-            - path: players.0.zones.player_deck.card_count
-            - value: 0
-        - isGreaterThan:
-            - path: players.0.zones.winnings.card_count
-            - value: 0
+      or:
+        - isLessThan:
+            - add:
+                - count: [ { path: "$.players[0].zones.player_deck" } ]
+                - count: [ { path: "$.players[0].zones.winnings" } ]
+            - value: 4
+        - isLessThan:
+            - add:
+                - count: [ { path: "$.players[1].zones.player_deck" } ]
+                - count: [ { path: "$.players[1].zones.winnings" } ]
+            - value: 4
     effect:
-      - action: MOVE_ALL
-        from: players.0.zones.winnings
-        to: players.0.zones.player_deck
-      - action: SHUFFLE
-        target: players.0.zones.player_deck
-
-  - id: replenish_deck_from_winnings_p2_replenish
-    trigger: on.phase.Replenish2
-    condition:
-      and:
-        - isEqual:
-            - path: players.1.zones.player_deck.card_count
-            - value: 0
-        - isGreaterThan:
-            - path: players.1.zones.winnings.card_count
-            - value: 0
-    effect:
-      - action: MOVE_ALL
-        from: players.1.zones.winnings
-        to: players.1.zones.player_deck
-      - action: SHUFFLE
-        target: players.1.zones.player_deck
+      # Case 1: both cannot continue -> award to leader (tie -> player 0)
+      - action: IF
+        condition:
+          and:
+            - isLessThan:
+                - add:
+                    - count: [ { path: "$.players[0].zones.player_deck" } ]
+                    - count: [ { path: "$.players[0].zones.winnings" } ]
+                - value: 4
+            - isLessThan:
+                - add:
+                    - count: [ { path: "$.players[1].zones.player_deck" } ]
+                    - count: [ { path: "$.players[1].zones.winnings" } ]
+                - value: 4
+        then:
+          - action: IF
+            condition:
+              isGreaterThan:
+                - add:
+                    - count: [ { path: "$.players[0].zones.player_deck" } ]
+                    - count: [ { path: "$.players[0].zones.winnings" } ]
+                - add:
+                    - count: [ { path: "$.players[1].zones.player_deck" } ]
+                    - count: [ { path: "$.players[1].zones.winnings" } ]
+            then:
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[0].zones.play_area"
+                to:
+                  path: "$.players[0].zones.winnings"
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[1].zones.play_area"
+                to:
+                  path: "$.players[0].zones.winnings"
+            else:
+              - action: IF
+                condition:
+                  isGreaterThan:
+                    - add:
+                        - count: [ { path: "$.players[1].zones.player_deck" } ]
+                        - count: [ { path: "$.players[1].zones.winnings" } ]
+                    - add:
+                        - count: [ { path: "$.players[0].zones.player_deck" } ]
+                        - count: [ { path: "$.players[0].zones.winnings" } ]
+                then:
+                  - action: MOVE_ALL
+                    from:
+                      path: "$.players[0].zones.play_area"
+                    to:
+                      path: "$.players[1].zones.winnings"
+                  - action: MOVE_ALL
+                    from:
+                      path: "$.players[1].zones.play_area"
+                    to:
+                      path: "$.players[1].zones.winnings"
+                else:
+                  # exact tie -> deterministic seat-order winner (player 0)
+                  - action: MOVE_ALL
+                    from:
+                      path: "$.players[0].zones.play_area"
+                    to:
+                      path: "$.players[0].zones.winnings"
+                  - action: MOVE_ALL
+                    from:
+                      path: "$.players[1].zones.play_area"
+                    to:
+                      path: "$.players[0].zones.winnings"
+        else:
+          # Case 2: exactly one cannot continue -> opponent gets the pot
+          - action: IF
+            condition:
+              isLessThan:
+                - add:
+                    - count: [ { path: "$.players[0].zones.player_deck" } ]
+                    - count: [ { path: "$.players[0].zones.winnings" } ]
+                - value: 4
+            then:
+              # Player 0 cannot -> Player 1 gets pot
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[0].zones.play_area"
+                to:
+                  path: "$.players[1].zones.winnings"
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[1].zones.play_area"
+                to:
+                  path: "$.players[1].zones.winnings"
+            else:
+              # Player 1 cannot -> Player 0 gets pot
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[0].zones.play_area"
+                to:
+                  path: "$.players[0].zones.winnings"
+              - action: MOVE_ALL
+                from:
+                  path: "$.players[1].zones.play_area"
+                to:
+                  path: "$.players[0].zones.winnings"
