@@ -9,7 +9,7 @@ Legend
 
 ## 1) Loader, Schema, Modularity
 - [x] Enforce cgml_version equals "1.3" (reject others; clear error).
-- [ ] Add meta.rng support to Meta model: { deterministic: bool, seed?: int }.
+- [x] Add meta.rng support to Meta model: { deterministic: bool, seed?: int }.
 - [ ] Implement !inherit directive with merge/override rules:
   - [ ] Shallow object merge by key; child overrides parent.
   - [ ] Array identity merge: rules by id; components.decks by name; components.zones by name; component_types entries by type/name; transitions by (from,to,id?).
@@ -34,8 +34,8 @@ Legend
 - [ ] Add selector filters: [by_id=...], [current], [opponent], [team=...].
 - [ ] Add path functions: top(<zone|list>), bottom(<zone|list>), all(<zone>), count(<zone|list>), owner(<card>), rank(<card>).
 - [ ] Support ref placeholders in path strings: ref:<name>.
-- [ ] Keep $.shared_zones only if documented; otherwise remove or alias through $.zones (spec-align).
-- [ ] Remove support for non-$ dotted paths; require $-rooted selectors (align to spec).
+- [x] Keep $.shared_zones only if documented; otherwise remove or alias through $.zones (spec-align).
+- [x] Remove support for non-$ dotted paths; require $-rooted selectors (align to spec).
 
 ## 4) Expression / Operator Engine
 - [ ] Ensure top-level Condition nodes always resolve to boolean. Avoid returning raw values from max/min/sum/count in evaluate_condition.
@@ -51,9 +51,9 @@ Legend
 
 ## 5) Actions: Movement, Visibility, Search, Random, Structure
 - Movement & dealing
-  - [ ] DEAL (runtime) to a target zone (single player), not round-robin.
-  - [ ] DEAL_ROUND_ROBIN (runtime & setup), respecting order and count.
-  - [ ] MOVE_ALL (runtime) – already present.
+  - [x] DEAL (runtime) to a target zone (single player), not round-robin.
+  - [x] DEAL_ROUND_ROBIN (runtime & setup), respecting order and count.
+  - [x] MOVE_ALL (runtime) – already present.
   - [ ] DEAL_ALL (runtime) – add if required by spec (present as standardized).
 - Visibility & face state
   - [ ] REVEAL (respect visibility semantics; change effective visibility mask).
@@ -109,9 +109,9 @@ Legend
 - [ ] Win condition: implement flow.win_condition.evaluator to compute winner(s)/ranking/reason; use at GameOver.
 
 ## 8) Determinism & RNG
-- [ ] Honor meta.rng settings; seed global PRNG(s) from meta.rng.seed when deterministic.
-- [ ] Route all random choices (shuffle, choose_random, random policy selection) through seeded PRNG.
-- [ ] Remove nondeterministic random.choice in simulator for action selection when deterministic is enabled (or make selection deterministic).
+- [x] Honor meta.rng settings; seed global PRNG(s) from meta.rng.seed when deterministic.
+- [x] Route all random choices (shuffle, choose_random, random policy selection) through seeded PRNG.
+- [x] Remove nondeterministic random.choice in simulator for action selection when deterministic is enabled (or make selection deterministic).
 
 ## 9) Error Handling & Diagnostics
 - [ ] Implement canPerform operator as dry-run check for actions.
@@ -121,9 +121,9 @@ Legend
 ## 10) Non-Standard Behavior (remove)
 - [x] Action name matching: enforce exact-case per spec; remove case-insensitive lookup and remove SET_GAME_STATE alias support (accept only SET_STATE).
 - [x] Remove FOR_EACH_PLAYER without do (next-action fan-out). Only explicit do is supported.
-- [ ] Remove support for non-$ dotted paths; require $-rooted selectors exclusively.
+- [x] Remove support for non-$ dotted paths; require $-rooted selectors exclusively.
 - [ ] Remove auto rank comparison casting in comparisons; require explicit rank_value for rank comparisons.
-- [ ] Remove $.shared_zones as a separate path root; provide $.zones only (maintain internal alias if needed but not exposed).
+- [x] Remove $.shared_zones as a separate path root; provide $.zones only (maintain internal alias if needed but not exposed).
 
 ## 11) Spec Feedback / Proposed Updates
 - [ ] Document list operator explicitly in §12 since examples use it.

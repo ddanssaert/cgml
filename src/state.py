@@ -75,6 +75,7 @@ def create_deck(deck_def: dict, deck_type_def: Any) -> List[Card]:
 
 def build_game_state_from_cgml(cgml: Any, player_count: int = None) -> GameState:
     deck_types = cgml.components.component_types.get('deck_types', {}) if cgml.components.component_types else {}
+    zone_types = cgml.components.component_types.get('zone_types', {}) if cgml.components.component_types else {}
     decks: Dict[str, List[Card]] = {}
     for deck_name, deck_def in (cgml.components.decks or {}).items():
         deck_type_def = deck_types.get(deck_def.type, {})
@@ -91,6 +92,15 @@ def build_game_state_from_cgml(cgml: Any, player_count: int = None) -> GameState
     per_player_zone_defs = [z for z in zone_defs if getattr(z, "per_player", False)]
     shared_zone_defs = [z for z in zone_defs if not getattr(z, "per_player", False)]
 
+    def _apply_zone_type(zone: Zone) -> None:
+        # Copy ordering/visibility from zone_types if available
+        zt = zone_types.get(zone.type, None)
+        if zt is not None:
+            if getattr(zt, 'ordering', None) is not None:
+                zone.ordering = zt.ordering
+            if getattr(zt, 'visibility', None) is not None:
+                zone.visibility = zt.visibility
+
     for pidx in range(player_count):
         pname = f"Player {pidx + 1}"
         player = Player(id=pidx, name=pname)
@@ -102,16 +112,19 @@ def build_game_state_from_cgml(cgml: Any, player_count: int = None) -> GameState
                 of_deck=getattr(zone_def, 'of_deck', None),
                 owner=pidx
             )
+            _apply_zone_type(zone)
             player.zones[zone.name] = zone
         players.append(player)
 
     for zone_def in shared_zone_defs:
-        shared_zones[zone_def.name] = Zone(
+        zone = Zone(
             name=zone_def.name,
             type=zone_def.type,
             of_deck=getattr(zone_def, 'of_deck', None),
             owner=None
         )
+        _apply_zone_type(zone)
+        shared_zones[zone.name] = zone
 
     state = GameState(
         players=players,
@@ -136,101 +149,65 @@ def build_game_state_from_cgml(cgml: Any, player_count: int = None) -> GameState
         if not assigned:
             print(f"Warning: Deck '{deck_name}' was generated but not assigned to any zone!")
 
+    # Shuffle zones that declare ordering: shuffled
+    for zone in list(state.shared_zones.values()) + [z for p in state.players for z in p.zones.values()]:
+        if getattr(zone, 'ordering', None) == 'shuffled':
+            random.shuffle(zone.cards)
+
     return state
 
 
 def find_zone(state: GameState, zone_path: str, player: Optional[Player] = None) -> Zone:
     """
-    Resolves a dot or selector-like path to a Zone within the GameState.
-    - Supports: 'players.0.zones.discard', 'player.1.winnings', 'zones.deck', 'deck'
-    - Minimal support for selector style: '$.players[0].zones.hand', '$.zones.deck'
+    Resolves a selector-like path to a Zone within the GameState.
+    - Supports: '$.players[0].zones.discard', '$.zones.deck'
+    - Minimal: '$.players[$player].zones.<name>' with context injection handled elsewhere.
     """
     if isinstance(zone_path, Zone):
         return zone_path
 
-    # Shortcut: if just a single word, use player zone/then shared
-    if '.' not in zone_path and '[' not in zone_path:
-        if player and zone_path in player.zones:
-            return player.zones[zone_path]
-        if zone_path in state.shared_zones:
-            return state.shared_zones[zone_path]
-        for p in state.players:
-            if zone_path in p.zones:
-                return p.zones[zone_path]
-        raise ValueError(f"Zone '{zone_path}' not found.")
+    if not isinstance(zone_path, str) or not zone_path.startswith('$.'):
+        raise ValueError("Only $-rooted selector paths are supported for zone lookups.")
 
     # JSONPath-like short support
-    if zone_path.startswith('$.'):
-        current: Any = {
-            'players': state.players,
-            'zones': state.shared_zones,
-            'shared_zones': state.shared_zones,
-        }
-        # Very simple tokenizer
-        parts: List[str] = []
-        buf = ''
-        i = 2
-        while i < len(zone_path):
-            ch = zone_path[i]
-            if ch == '.' and '[' not in buf and ']' not in buf:
-                if buf:
-                    parts.append(buf)
-                    buf = ''
-                i += 1
-                continue
-            buf += ch
-            i += 1
-        if buf:
-            parts.append(buf)
-        for part in parts:
-            key = part
-            idx: Optional[int] = None
-            if '[' in part and part.endswith(']'):
-                key = part[: part.index('[')]
-                inside = part[part.index('[') + 1 : -1]
-                if inside != '*':
-                    idx = int(inside)
-            if key:
-                if isinstance(current, dict):
-                    current = current[key]
-                else:
-                    current = getattr(current, key)
-            if idx is not None:
-                current = current[idx]
-        if isinstance(current, Zone):
-            return current
-        raise ValueError(f"Path '{zone_path}' does not resolve to a Zone")
-
-    # Build starting context for dotted paths
-    ctx = {
-        "players": state.players,
-        "zones": state.shared_zones,
-        "shared_zones": state.shared_zones,
+    current: Any = {
+        'players': state.players,
+        'zones': state.shared_zones,
     }
-    if player:
-        ctx["player"] = player
-
-    current: Any = ctx
-    for part in zone_path.split('.'):
-        if isinstance(current, list):
-            try:
-                idx = int(part)
-                current = current[idx]
-            except Exception:
-                raise KeyError(f"Cannot index list with '{part}'")
-        elif isinstance(current, dict):
-            if part in current:
-                current = current[part]
+    # Very simple tokenizer
+    parts: List[str] = []
+    buf = ''
+    i = 2
+    while i < len(zone_path):
+        ch = zone_path[i]
+        if ch == '.' and '[' not in buf and ']' not in buf:
+            if buf:
+                parts.append(buf)
+                buf = ''
+            i += 1
+            continue
+        buf += ch
+        i += 1
+    if buf:
+        parts.append(buf)
+    for part in parts:
+        key = part
+        idx: Optional[int] = None
+        if '[' in part and part.endswith(']'):
+            key = part[: part.index('[')]
+            inside = part[part.index('[') + 1 : -1]
+            if inside != '*':
+                idx = int(inside)
+        if key:
+            if isinstance(current, dict):
+                current = current[key]
             else:
-                raise KeyError(f"Key '{part}' not found.")
-        elif hasattr(current, part):
-            current = getattr(current, part)
-        else:
-            raise KeyError(f"Cannot resolve part '{part}' in object {current}")
-
-    if not isinstance(current, Zone):
-        raise ValueError(f"Path '{zone_path}' does not resolve to a Zone (got {type(current).__name__})")
-    return current
+                current = getattr(current, key)
+        if idx is not None:
+            current = current[idx]
+    if isinstance(current, Zone):
+        return current
+    raise ValueError(f"Path '{zone_path}' does not resolve to a Zone")
 
 
 def shuffle_zone(zone: Zone) -> None:
@@ -291,18 +268,45 @@ def perform_setup_action(action: dict, state: GameState) -> None:
             zone = find_zone(state, target)
             shuffle_zone(zone)
         else:
-            t = action.get("target")
-            if t and isinstance(t, str) and t.startswith("zones."):
-                name = t.split('.')[1]
-                if name in state.shared_zones:
-                    shuffle_zone(state.shared_zones[name])
+            raise ValueError("SHUFFLE requires target.path")
     elif typ == "DEAL":
+        # DEAL in setup is a single-target deal, not round-robin
         frm = action.get('from')
         to = action.get('to')
-        count = action.get('count', 1)
+        count = int(action.get('count', 1))
         from_zone = find_zone(state, frm['path'] if isinstance(frm, dict) else frm)
-        to_zone_name = (to['path'] if isinstance(to, dict) else to).split('.')[-1]
-        deal_cards(from_zone, state.players, to_zone_name, count)
+        to_path = to['path'] if isinstance(to, dict) else to
+        # Expecting a specific player's zone path like $.players[0].zones.hand
+        if not to_path.startswith('$.players['):
+            raise ValueError("DEAL setup expects a specific player's zone path under $.players[<idx>].zones.<name>")
+        # Parse player index and zone name
+        try:
+            idx_start = to_path.index('[') + 1
+            idx_end = to_path.index(']')
+            pidx = int(to_path[idx_start:idx_end])
+            zone_name = to_path.split('.zones.')[1]
+        except Exception as e:
+            raise ValueError(f"Invalid DEAL target path: {to_path}") from e
+        # Execute count cards to that player's zone
+        for _ in range(count):
+            if from_zone.cards:
+                state.players[pidx].zones[zone_name].cards.append(from_zone.cards.pop())
+    elif typ == "DEAL_ROUND_ROBIN":
+        # Round-robin deal from a shared/source zone to all players' target zone
+        frm = action.get('from')
+        to = action.get('to')
+        order = (action.get('order') or 'clockwise').lower()
+        count = int(action.get('count', 1))
+        from_zone = find_zone(state, frm['path'] if isinstance(frm, dict) else frm)
+        to_path = to['path'] if isinstance(to, dict) else to
+        # Expecting $.players[*].zones.<name>
+        if '[*]' not in to_path or '.zones.' not in to_path:
+            raise ValueError("DEAL_ROUND_ROBIN setup expects path like $.players[*].zones.<zone>")
+        to_zone_name = to_path.split('.zones.')[-1]
+        targets = list(state.players)
+        if order == 'counterclockwise':
+            targets = list(reversed(targets))
+        deal_cards(from_zone, targets, to_zone_name, count)
     elif typ == "MOVE":
         frm = action.get('from')
         to = action.get('to')
@@ -322,7 +326,8 @@ def perform_setup_action(action: dict, state: GameState) -> None:
         from_path = frm['path'] if isinstance(frm, dict) else frm
         to_path = to['path'] if isinstance(to, dict) else to
         deck_zone = find_zone(state, from_path)
-        to_zone_name = to_path.split('.')[-1]
+        # Expecting $.players[*].zones.<name>
+        to_zone_name = to_path.split('.zones.')[-1]
         deal_all_cards(deck_zone, state.players, to_zone_name)
     else:
         raise NotImplementedError(f"Unknown setup action: {typ}")

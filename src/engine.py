@@ -5,129 +5,97 @@ from src.loader import Condition, Operand, EffectAction
 
 def resolve_path(obj: Any, path: str, context: Optional[Dict[str, Any]] = None) -> Any:
     """
-    A simple selector resolver supporting a pragmatic subset of the README v1.3 syntax:
+    Selector resolver supporting a subset of CGML v1.3 $-rooted syntax:
     - $.players[0].zones.hand
     - $.zones.deck
-    - $.players[*] (returns list of players)
-    - $.players[$player] (uses context['$player'])
-    Falls back to dot-path access for non-$ roots.
+    - $.players[*]
+    - $.players[$player]
+
+    Non-$ dotted paths are not supported.
     """
     context = context or {}
     if path is None:
         return obj
 
     p = path.strip()
-    if p.startswith("$"):
-        # Build a synthetic root for selector-style paths
-        root = {
-            "players": getattr(obj, "players", None),
-            "zones": getattr(obj, "shared_zones", None),
-            "shared_zones": getattr(obj, "shared_zones", None),
-            "state": getattr(obj, "current_state", None),
-        }
-        current: Any = root
-        # Tokenize by dots while keeping bracket segments grouped
-        parts: List[str] = []
-        buf = ""
-        i = 1  # skip leading $
-        while i < len(p):
-            ch = p[i]
-            if ch == '.' and ('[' not in buf or (buf.count('[') == buf.count(']'))):
-                if buf:
-                    parts.append(buf)
-                    buf = ""
-                i += 1
-                continue
-            buf += ch
-            i += 1
-        if buf:
-            parts.append(buf)
-        # Resolve each part (with optional [index])
-        for part in parts:
-            key = part
-            idx_token: Optional[str] = None
-            star = False
-            if '[' in part and part.endswith(']'):
-                key = part[: part.index('[')]
-                inside = part[part.index('[') + 1 : -1]
-                if inside == '*':
-                    star = True
-                else:
-                    idx_token = inside
-            if key:
-                if isinstance(current, list):
-                    # map attribute/key over list elements
-                    mapped: List[Any] = []
-                    for elem in current:
-                        if isinstance(elem, dict):
-                            mapped.append(elem.get(key))
-                        else:
-                            mapped.append(getattr(elem, key))
-                    current = mapped
-                elif isinstance(current, dict):
-                    current = current.get(key)
-                else:
-                    current = getattr(current, key)
-            if star:
-                # Keep list as-is
-                if isinstance(current, dict):
-                    current = list(current.values())
-                # if scalar, wrap
-                if not isinstance(current, list):
-                    current = [current]
-            elif idx_token is not None:
-                # Index can be integer or $player reference
-                if idx_token.startswith('$'):
-                    if idx_token in context:
-                        try:
-                            idx = int(context[idx_token])
-                        except Exception:
-                            idx = context[idx_token]
-                    else:
-                        raise KeyError(f"Context variable '{idx_token}' not set for path {path}")
-                else:
-                    try:
-                        idx = int(idx_token)
-                    except ValueError:
-                        idx = idx_token
-                if isinstance(current, list):
-                    current = current[idx]  # type: ignore[index]
-                elif isinstance(current, dict):
-                    current = current[idx]  # type: ignore[index]
-                else:
-                    raise KeyError(f"Cannot index non-collection with [{idx_token}] in path {path}")
-        return current
+    if not p.startswith("$"):
+        raise ValueError(f"Only $-rooted selector paths are supported (got: {path})")
 
-    # Fallback: dotted attribute/dict/list path
-    current = obj
-    for part in path.split('.'):
-        if isinstance(current, dict):
-            if part.isdigit() and part in current:
-                current = current[part]
-            elif part in current:
-                current = current[part]
+    # Build a synthetic root for selector-style paths
+    root = {
+        "players": getattr(obj, "players", None),
+        "zones": getattr(obj, "shared_zones", None),
+    }
+    current: Any = root
+    # Tokenize by dots while keeping bracket segments grouped
+    parts: List[str] = []
+    buf = ""
+    i = 1  # skip leading $
+    while i < len(p):
+        ch = p[i]
+        if ch == '.' and ('[' not in buf or (buf.count('[') == buf.count(']'))):
+            if buf:
+                parts.append(buf)
+                buf = ""
+            i += 1
+            continue
+        buf += ch
+        i += 1
+    if buf:
+        parts.append(buf)
+    # Resolve each part (with optional [index])
+    for part in parts:
+        key = part
+        idx_token: Optional[str] = None
+        star = False
+        if '[' in part and part.endswith(']'):
+            key = part[: part.index('[')]
+            inside = part[part.index('[') + 1 : -1]
+            if inside == '*':
+                star = True
+            else:
+                idx_token = inside
+        if key:
+            if isinstance(current, list):
+                # map attribute/key over list elements
+                mapped: List[Any] = []
+                for elem in current:
+                    if isinstance(elem, dict):
+                        mapped.append(elem.get(key))
+                    else:
+                        mapped.append(getattr(elem, key))
+                current = mapped
+            elif isinstance(current, dict):
+                current = current.get(key)
+            else:
+                current = getattr(current, key)
+        if star:
+            # Keep list as-is
+            if isinstance(current, dict):
+                current = list(current.values())
+            if not isinstance(current, list):
+                current = [current]
+        elif idx_token is not None:
+            # Index can be integer or $player reference
+            if idx_token.startswith('$'):
+                if idx_token in context:
+                    try:
+                        idx = int(context[idx_token])
+                    except Exception:
+                        idx = context[idx_token]
+                else:
+                    raise KeyError(f"Context variable '{idx_token}' not set for path {path}")
             else:
                 try:
-                    idx = int(part)
-                    current = current[idx]
-                except Exception:
-                    raise KeyError(f"Key '{part}' not found in dict: {list(current.keys())}")
-        elif isinstance(current, list):
-            try:
-                idx = int(part)
-            except ValueError:
-                raise KeyError(f"Cannot use key '{part}' on list")
-            if idx < len(current):
-                current = current[idx]
+                    idx = int(idx_token)
+                except ValueError:
+                    idx = idx_token
+            if isinstance(current, list):
+                current = current[idx]  # type: ignore[index]
+            elif isinstance(current, dict):
+                current = current[idx]  # type: ignore[index]
             else:
-                raise IndexError(f"Index '{idx}' out of bounds in list access {repr(path)}")
-        elif hasattr(current, part):
-            current = getattr(current, part)
-        else:
-            try:
-                current = current[part]
-            except Exception:
-                raise AttributeError(f"Cannot resolve '{part}' in path '{path}' on {repr(current)}")
+                raise KeyError(f"Cannot index non-collection with [{idx_token}] in path {path}")
     return current
 
 

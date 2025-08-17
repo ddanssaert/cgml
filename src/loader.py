@@ -10,11 +10,18 @@ class PlayerSpec(BaseModel):
     min: int
     max: int
 
+class RNGConfig(BaseModel):
+    """Randomness configuration for determinism and seeding."""
+    deterministic: bool = False
+    seed: Optional[int] = None
+
+
 class Meta(BaseModel):
     name: str
     author: str
     description: str
     players: PlayerSpec
+    rng: Optional[RNGConfig] = None
     meta: Optional[Dict[str, Any]] = None  # for extensibility/docs
 
 # -- Components, Decks, Zones, Variables -- #
@@ -107,7 +114,7 @@ class Operand(BaseModel):
     list_: Optional[List["Operand"]] = Field(None, alias="list")
 
     def is_leaf(self) -> bool:
-        '''Returns True if this is a terminal (path or value).'''
+        """Returns True if this is a terminal (path or value)."""
         return (self.path is not None or self.value is not None or self.ref is not None)
 
     class Config:

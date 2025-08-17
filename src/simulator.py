@@ -19,7 +19,7 @@ if not logger.handlers:
 
 # --- Action Registry Setup ---
 
-def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, context=None, **kwargs):
+def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, context=None, **kwargs) -> None:
     """MOVE cards between zones.
 
     - from_: Zone, Card, or path-like resolved object (may resolve to None if empty via top()).
@@ -58,7 +58,7 @@ def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int]
     move_cards(from_zone, to_zone, cnt)
 
 
-def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, context=None, **kwargs):
+def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, context=None, **kwargs) -> None:
     from src.state import find_zone, move_all_cards
     # Graceful no-op if params are missing
     if from_ is None or to is None:
@@ -68,12 +68,72 @@ def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, co
     move_all_cards(from_zone, to_zone)
 
 
-def set_state_action(game_state: GameState, state: str, context=None, **kwargs):
+def deal_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, context=None, **kwargs) -> None:
+    """DEAL from a source zone to a single target zone (runtime).
+
+    Semantics: identical to moving N cards from the source to the target zone.
+    """
+    from src.state import find_zone, move_cards
+
+    if from_ is None or to is None:
+        return
+
+    try:
+        cnt = int(count) if count is not None else 1
+    except Exception:
+        cnt = 1
+
+    from_zone = from_ if hasattr(from_, 'cards') else find_zone(game_state, from_)
+    to_zone = to if hasattr(to, 'cards') else find_zone(game_state, to)
+    move_cards(from_zone, to_zone, cnt)
+
+
+def deal_round_robin_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, order: Optional[str] = None, context=None, **kwargs) -> None:
+    """DEAL_ROUND_ROBIN from a source zone to a list of target zones (runtime).
+
+    - from_: source Zone or path
+    - to: list of Zones (e.g., resolved from $.players[*].zones.hand) or a selector path
+    - count: number of rounds (each round gives one card to each target in order)
+    - order: 'clockwise' (default) or 'counterclockwise'
+    """
+    from src.state import find_zone
+
+    if from_ is None or to is None:
+        return
+
+    try:
+        rounds = int(count) if count is not None else 1
+    except Exception:
+        rounds = 1
+
+    from_zone = from_ if hasattr(from_, 'cards') else find_zone(game_state, from_)
+
+    # Normalize targets to a list of Zone objects
+    if isinstance(to, list):
+        targets = [z for z in to if hasattr(z, 'cards')]
+    else:
+        # Expect a selector yielding list of zones
+        maybe = to if hasattr(to, 'cards') else find_zone(game_state, to)
+        targets = [maybe] if hasattr(maybe, 'cards') else []
+
+    if not targets:
+        return
+
+    if (order or '').lower() == 'counterclockwise':
+        targets = list(reversed(targets))
+
+    for _ in range(rounds):
+        for tz in targets:
+            if from_zone.cards:
+                tz.cards.append(from_zone.cards.pop())
+
+
+def set_state_action(game_state: GameState, state: str, context=None, **kwargs) -> None:
     """Set the current FSM state."""
     game_state.current_state = state
 
 
-def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs):
+def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs) -> None:
     from src.state import find_zone, shuffle_zone
     zone = target if hasattr(target, 'cards') else find_zone(game_state, target)
     shuffle_zone(zone)
@@ -83,6 +143,8 @@ def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs):
 ACTION_REGISTRY = {
     "MOVE": move_action,
     "MOVE_ALL": move_all_action,
+    "DEAL": deal_action,
+    "DEAL_ROUND_ROBIN": deal_round_robin_action,
     "SET_STATE": set_state_action,
     "SHUFFLE": shuffle_action,
 }
@@ -92,8 +154,18 @@ class GameSimulator:
     def __init__(self, cgml_definition: Any, player_count: int):
         """
         Initialize simulator with rules engine and built game state.
+        Ensures RNG seeding occurs before any state construction or setup so that
+        SHUFFLE and any random choices are deterministic when configured.
         """
         self.cgml_definition = cgml_definition
+
+        # RNG seeding based on meta.rng (seed before building state/setup)
+        rng_cfg = getattr(self.cgml_definition.meta, 'rng', None)
+        if rng_cfg and getattr(rng_cfg, 'deterministic', False):
+            seed_val = getattr(rng_cfg, 'seed', None)
+            random.seed(seed_val)
+            logger.debug(f"Deterministic RNG enabled. Seed={seed_val}")
+
         self.rules_engine = RulesEngine(ACTION_REGISTRY)
         self.player_count = player_count
         self.game_state = self._initialize_state(cgml_definition)
@@ -193,7 +265,16 @@ class GameSimulator:
                 continue
 
             prev_state_name = self.game_state.current_state
-            selected_action = random.choice(legal)
+
+            # Choose next legal action deterministically if rng.deterministic, otherwise random
+            rng_cfg = getattr(self.cgml_definition.meta, 'rng', None)
+            if rng_cfg and getattr(rng_cfg, 'deterministic', False):
+                selected_action = legal[0]  # deterministic pick: first legal rule
+                logger.debug("Deterministic action selection: picking first legal rule.")
+            else:
+                selected_action = random.choice(legal)
+                logger.debug("Random action selection:")
+
             logger.debug(
                 f"Executing action (rule_id={selected_action['rule_id']}) with effect: {selected_action['effect']}"
             )
