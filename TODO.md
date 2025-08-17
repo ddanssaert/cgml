@@ -35,10 +35,7 @@ Legend
 - [ ] Add path functions: top(<zone|list>), bottom(<zone|list>), all(<zone>), count(<zone|list>), owner(<card>), rank(<card>).
 - [ ] Support ref placeholders in path strings: ref:<name>.
 - [ ] Keep $.shared_zones only if documented; otherwise remove or alias through $.zones (spec-align).
-- [ ] Decide on non-$ dotted paths:
-  - Recommendation: make engine strict to $-rooted selectors; keep dotted path resolution for internal use/tests only.
-  - [ ] If retained, document as non-standard extension (or remove).
-
+- [ ] Remove support for non-$ dotted paths; require $-rooted selectors (align to spec).
 ## 4) Expression / Operator Engine
 - [ ] Ensure top-level Condition nodes always resolve to boolean. Avoid returning raw values from max/min/sum/count in evaluate_condition.
 - [ ] Implement missing core operators per spec:
@@ -71,7 +68,7 @@ Legend
   - [ ] MILL (move N from deck to discard).
   - [ ] REVEAL_MATCHING (compute set; apply visibility change).
 - Flow control / structure
-  - [ ] FOR_EACH_PLAYER: implement order parameter and simultaneous semantics; remove or deprecate shorthand (fan-out of next action) unless added to spec.
+  - [ ] FOR_EACH_PLAYER: implement order parameter and simultaneous semantics; remove shorthand that fans-out the next action; only explicit do is allowed.
   - [ ] PARALLEL: execute branches and join per wait: all; deterministic order.
   - [ ] IF: implement with then/else blocks using engine condition evaluation.
 - Flow modifiers
@@ -121,23 +118,16 @@ Legend
 - [ ] Enforce schema-valid parameters pre-execution; surface clear messages.
 
 ## 10) Backward Compatibility & Non-Standard Behavior
-- [ ] Action name matching: enforce exact-case per spec, except for the documented SET_GAME_STATE alias (to be deprecated in v1.4).
-- [ ] FOR_EACH_PLAYER without do:
-  - Proposed: deprecate shorthand; keep temporarily with warning; prefer explicit do.
-  - [ ] If keeping, propose spec update to include shorthand; otherwise remove.
-- [ ] Non-$ dotted paths:
-  - Proposed: mark as non-standard; emit warning; recommend $-rooted selectors.
-- [ ] Auto rank comparison casting in comparisons without rank_value:
-  - Proposed: remove auto-cast; require explicit rank_value. If retained, document as extension.
-- [ ] $.shared_zones path root:
-  - Proposed: alias of $.zones; remove separate root to align with spec.
-
+- [ ] Action name matching: enforce exact-case per spec; remove case-insensitive lookup and remove SET_GAME_STATE alias support (accept only SET_STATE).
+- [ ] Remove FOR_EACH_PLAYER without do (next-action fan-out). Only explicit do is supported.
+- [ ] Remove support for non-$ dotted paths; require $-rooted selectors exclusively.
+- [ ] Remove auto rank comparison casting in comparisons; require explicit rank_value for rank comparisons.
+- [ ] Remove $.shared_zones as a separate path root; provide $.zones only (maintain internal alias if needed but not exposed).
 ## 11) Spec Feedback / Proposed Updates
-- [ ] Clarify whether plain dotted paths are allowed (engine currently supports; recommend disallow or document as extension).
 - [ ] Document list operator explicitly in §12 since examples use it.
-- [ ] Consider documenting FOR_EACH_PLAYER shorthand (next-action fan-out) or explicitly forbid it.
 - [ ] Define event context schema for on.draw/on.move/etc (fields and anchors like $.card).
 - [ ] Clarify DEAL vs DEAL_ROUND_ROBIN semantics with examples in setup/runtime.
+- [ ] Confirm spec disallows plain dotted paths and separate $.shared_zones root (engine will not support them).
 
 ## 12) Tests & Conformance Suite
 - [ ] Build test fixtures for examples in README (examples/*.yaml) to validate operators/actions.
@@ -148,11 +138,11 @@ Legend
 
 ## 13) Documentation & Developer Experience
 - [ ] Update README with engine-supported subset until full alignment, including any temporary extensions.
-- [ ] Provide migration notes (e.g., DEAL behavior change; FOR_EACH shorthand deprecation; rank comparisons).
+- [ ] Provide migration notes (e.g., DEAL behavior change; FOR_EACH shorthand removal; rank comparisons).
 - [ ] Add developer docs for writing actions and emitting events.
 
 ---
 
 Notes
 - Current gaps include: inheritance/merge, RNG determinism, visibility/face state, many actions, operators, path filters/anchors, rule timing/priority/once_per, events, win condition, and simultaneity semantics.
-- Where marked as “proposed spec update,” we’ll open issues/PRs against the spec if we decide to retain engine conveniences.
+- Where marked as “spec feedback,” we’ll open issues/PRs to clarify the wording; engine will not ship non-spec conveniences.
