@@ -207,9 +207,19 @@ yaml.add_constructor(
 )
 
 def load_cgml_file(file_path: str) -> Optional[CgmlDefinition]:
-    """Loads and validates a CGML file (YAML), resolving all !include directives."""
+    """Loads and validates a CGML file (YAML), resolving all !include directives.
+
+    Enforces cgml_version == "1.3" before model validation.
+    """
     with open(file_path, "r") as f:
         dct = yaml.load(f, Loader=yaml.FullLoader)
+
+    # Enforce version strictly
+    ver = str(dct.get("cgml_version", ""))
+    if ver != "1.3":
+        print(f"Validation failed: Unsupported cgml_version '{ver}'. Expected '1.3'.")
+        return None
+
     try:
         definition = CgmlDefinition(**dct)
         return definition

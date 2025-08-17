@@ -68,7 +68,8 @@ def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, co
     move_all_cards(from_zone, to_zone)
 
 
-def set_game_state_action(game_state: GameState, state: str, context=None, **kwargs):
+def set_state_action(game_state: GameState, state: str, context=None, **kwargs):
+    """Set the current FSM state."""
     game_state.current_state = state
 
 
@@ -82,8 +83,7 @@ def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs):
 ACTION_REGISTRY = {
     "MOVE": move_action,
     "MOVE_ALL": move_all_action,
-    "SET_GAME_STATE": set_game_state_action,  # alias for SET_STATE
-    "SET_STATE": set_game_state_action,
+    "SET_STATE": set_state_action,
     "SHUFFLE": shuffle_action,
 }
 

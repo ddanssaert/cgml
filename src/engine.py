@@ -356,7 +356,7 @@ class RulesEngine:
             action_def = EffectAction.parse_obj(raw) if isinstance(raw, dict) else raw
             action_name = action_def.action
 
-            # Special handling: FOR_EACH_PLAYER (either with inline 'do' or affecting next action)
+            # Special handling: FOR_EACH_PLAYER (only with inline 'do')
             if action_name == 'FOR_EACH_PLAYER':
                 players_operand = getattr(action_def, 'players', None)
                 players_list = self.resolve_operand(players_operand, game_state, context) if players_operand else getattr(game_state, 'players', [])
@@ -377,45 +377,24 @@ class RulesEngine:
                     i += 1
                     continue
                 else:
-                    # No inline 'do' provided; mark pending to apply to next action
-                    context['$foreach_players'] = indices if indices else list(range(len(getattr(game_state, 'players', []))))
-                    context['$foreach_pending'] = True
+                    # No inline 'do' provided -> reject (spec requires explicit do)
+                    print("Action not implemented: FOR_EACH_PLAYER without 'do' is not supported.")
                     i += 1
                     continue
 
-            # Normal action execution (with optional foreach-pending fan-out)
-            action_func = self.actions.get(action_name) or self.actions.get(action_name.upper())
-            if not action_func and action_name == "SET_STATE":
-                action_func = self.actions.get("SET_GAME_STATE")
+            # Normal action execution
+            action_func = self.actions.get(action_name)
 
             if action_func:
-                if context.get('$foreach_pending') and '$foreach_players' in context:
-                    indices = context['$foreach_players']
-                    for idx in indices:
-                        context['$player'] = idx
-                        # Use by_alias=False so keys like 'from_' match function signatures
-                        raw_params = action_def.dict(exclude={"action"}, by_alias=False, exclude_none=True)
-                        params: Dict[str, Any] = {}
-                        for k, v in raw_params.items():
-                            if isinstance(v, (dict, list)):
-                                params[k] = self.resolve_operand(v, game_state, context)
-                            else:
-                                params[k] = v
-                        action_func(game_state, context=context, **params)
-                    # Clear pending fan-out after applying to one action
-                    context.pop('$foreach_pending', None)
-                    context.pop('$foreach_players', None)
-                    context.pop('$player', None)
-                else:
-                    # Use by_alias=False so keys like 'from_' match function signatures
-                    raw_params = action_def.dict(exclude={"action"}, by_alias=False, exclude_none=True)
-                    params: Dict[str, Any] = {}
-                    for k, v in raw_params.items():
-                        if isinstance(v, (dict, list)):
-                            params[k] = self.resolve_operand(v, game_state, context)
-                        else:
-                            params[k] = v
-                    action_func(game_state, context=context, **params)
+                # Use by_alias=False so keys like 'from_' match function signatures
+                raw_params = action_def.dict(exclude={"action"}, by_alias=False, exclude_none=True)
+                params: Dict[str, Any] = {}
+                for k, v in raw_params.items():
+                    if isinstance(v, (dict, list)):
+                        params[k] = self.resolve_operand(v, game_state, context)
+                    else:
+                        params[k] = v
+                action_func(game_state, context=context, **params)
             else:
                 print(f"Action not implemented: {action_name}")
             i += 1

@@ -8,7 +8,7 @@ Legend
 - [x] = done
 
 ## 1) Loader, Schema, Modularity
-- [ ] Enforce cgml_version equals "1.3" (reject others; clear error).
+- [x] Enforce cgml_version equals "1.3" (reject others; clear error).
 - [ ] Add meta.rng support to Meta model: { deterministic: bool, seed?: int }.
 - [ ] Implement !inherit directive with merge/override rules:
   - [ ] Shallow object merge by key; child overrides parent.
@@ -36,6 +36,7 @@ Legend
 - [ ] Support ref placeholders in path strings: ref:<name>.
 - [ ] Keep $.shared_zones only if documented; otherwise remove or alias through $.zones (spec-align).
 - [ ] Remove support for non-$ dotted paths; require $-rooted selectors (align to spec).
+
 ## 4) Expression / Operator Engine
 - [ ] Ensure top-level Condition nodes always resolve to boolean. Avoid returning raw values from max/min/sum/count in evaluate_condition.
 - [ ] Implement missing core operators per spec:
@@ -68,7 +69,7 @@ Legend
   - [ ] MILL (move N from deck to discard).
   - [ ] REVEAL_MATCHING (compute set; apply visibility change).
 - Flow control / structure
-  - [ ] FOR_EACH_PLAYER: implement order parameter and simultaneous semantics; remove shorthand that fans-out the next action; only explicit do is allowed.
+  - [ ] FOR_EACH_PLAYER: implement order parameter and simultaneous semantics; remove shorthand that fans-out the next action; only explicit do is allowed. [x] Shorthand removed in engine.
   - [ ] PARALLEL: execute branches and join per wait: all; deterministic order.
   - [ ] IF: implement with then/else blocks using engine condition evaluation.
 - Flow modifiers
@@ -117,12 +118,13 @@ Legend
 - [ ] Structured error reporting for action failures: include rule id, action index, reason.
 - [ ] Enforce schema-valid parameters pre-execution; surface clear messages.
 
-## 10) Backward Compatibility & Non-Standard Behavior
-- [ ] Action name matching: enforce exact-case per spec; remove case-insensitive lookup and remove SET_GAME_STATE alias support (accept only SET_STATE).
-- [ ] Remove FOR_EACH_PLAYER without do (next-action fan-out). Only explicit do is supported.
+## 10) Non-Standard Behavior (remove)
+- [x] Action name matching: enforce exact-case per spec; remove case-insensitive lookup and remove SET_GAME_STATE alias support (accept only SET_STATE).
+- [x] Remove FOR_EACH_PLAYER without do (next-action fan-out). Only explicit do is supported.
 - [ ] Remove support for non-$ dotted paths; require $-rooted selectors exclusively.
 - [ ] Remove auto rank comparison casting in comparisons; require explicit rank_value for rank comparisons.
 - [ ] Remove $.shared_zones as a separate path root; provide $.zones only (maintain internal alias if needed but not exposed).
+
 ## 11) Spec Feedback / Proposed Updates
 - [ ] Document list operator explicitly in §12 since examples use it.
 - [ ] Define event context schema for on.draw/on.move/etc (fields and anchors like $.card).
