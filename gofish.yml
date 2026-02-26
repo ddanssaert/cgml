@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=./cgml.schema.json
-cgml_version: 1.2
+cgml_version: 1.3
 meta:
   name: "Go Fish"
   author: "Traditional"
@@ -54,10 +54,10 @@ components:
 
 setup:
   - action: SHUFFLE
-    target: zones.deck
+    target: "$.zones.deck"
   - action: DEAL
-    from: zones.deck
-    to: zones.hand
+    from: "$.zones.deck"
+    to: "$.players[*].zones.hand"
     count: 5
 
 flow:
@@ -72,16 +72,11 @@ flow:
   transitions:
     - from: Playing
       to: GameOver
-      condition:
-        isEqual:
-          - path: zones.deck.card_count
-          - value: 0
+      condition: "count($.zones.deck) == 0"
 
   win_condition:
     description: "The player with the most books when the deck is empty wins."
-    evaluator:
-      max:
-        - path: players.book_count
+    evaluator: "max(list($.players[*].book_count))"
 
 rules:
   - id: player_asks_for_card
@@ -92,103 +87,61 @@ rules:
         prompt: "Choose a player to ask."
         options:
           type: player
-        filter:
-          not:
-            isEqual:
-              - path: player.id
-              - path: player.current.id
+        filter: "player.id != player.current.id"
         store_as: target_player
       - action: REQUEST_INPUT
         player: current
         prompt: "Choose a rank to ask for."
         options:
           type: rank
-        filter:
-          distinct:
-            - map:
-                - path: player.current.hand
-                - select: card.rank
+        filter: "distinct(map(player.current.hand, 'card.rank'))"
         store_as: target_rank
 
   - id: request_is_successful
     trigger: on.phase.Resolve
-    condition:
-      isGreaterThan:
-        - count:
-            - filter:
-                - path: ref:target_player.hand
-                - isEqual:
-                    - path: card.rank
-                    - value: ref:target_rank
-        - value: 0
+    condition: "count(filter(ref:target_player.hand, 'card.rank == ref:target_rank')) > 0"
     effect:
       - action: MOVE
-        from: ref:target_player.hand
-        to: player.current.hand
-        filter:
-          isEqual:
-            - path: card.rank
-            - value: ref:target_rank
+        from: "ref:target_player.hand"
+        to: "player.current.hand"
+        filter: "card.rank == ref:target_rank"
       - action: REPEAT_TURN
 
   - id: request_fails_go_fish
     trigger: on.phase.Resolve
-    condition:
-      isEqual:
-        - count:
-            - filter:
-                - path: ref:target_player.hand
-                - isEqual:
-                    - path: card.rank
-                    - value: ref:target_rank
-        - value: 0
+    condition: "count(filter(ref:target_player.hand, 'card.rank == ref:target_rank')) == 0"
     effect:
       - action: DRAW
         player: current
         count: 1
         store_as: drawn_card
       - action: REPEAT_TURN
-        condition:
-          isEqual:
-            - path: ref:drawn_card.rank
-            - value: ref:target_rank
+        condition: "ref:drawn_card.rank == ref:target_rank"
 
   - id: check_for_books
     trigger: on.phase.CheckForBooks
     effect:
       - action: FIND_AND_STORE
-        in: player.current.hand
-        group_by: card.rank
-        having:
-          isEqual:
-            - count: group
-            - value: 4
+        in: "player.current.hand"
+        group_by: "card.rank"
+        having: "count(group) == 4"
         store_as: completed_book_ranks
       - action: FOR_EACH
-        in: ref:completed_book_ranks
+        in: "ref:completed_book_ranks"
         do:
           - action: MOVE
-            from: player.current.hand
-            to: player.current.books
-            filter:
-              isEqual:
-                - path: card.rank
-                - value: ref:item
+            from: "player.current.hand"
+            to: "player.current.books"
+            filter: "card.rank == ref:item"
           - action: INCREMENT_VARIABLE
-            path: player.current.book_count
+            path: "player.current.book_count"
             value: 1
 
   - id: replenish_hand
     trigger: on.phase.CheckForBooks
-    condition:
-      isEqual:
-        - path: player.current.hand.card_count
-        - value: 0
+    condition: "count(player.current.hand) == 0"
     effect:
       - action: DRAW
         player: current
-        from: zones.deck
-        count:
-          min:
-            - value: 5
-            - path: zones.deck.card_count
+        from: "$.zones.deck"
+        count: "min(list(5, count($.zones.deck)))"

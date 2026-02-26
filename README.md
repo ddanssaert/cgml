@@ -374,53 +374,39 @@ effect:
 ```
 
 ---
-## 12. Expression Language (Operators)
+## 12. Expression Language (EL)
 
-All logical tests and computed expressions use a composable operator language.
+All logical tests and computed expressions use a concise, string-based Expression Language (EL). This replaces the older nested YAML objects to improve author readability.
 
-### 12.1 Operand Types
-- `value`: literal (number, string, boolean)
-- `path`: selector string (see §6)
-- `ref`: temporary variable name (see §11)
-- nested operator: object with a single operator key
+### 12.1 Core Syntax
+Expressions are evaluated in a safe sandbox supporting standard mathematical and boolean logic.
+- **Paths**: JSONPath-style selectors are natively supported. `$.players[0].zones.hand`
+- **Math**: `+`, `-`, `*`, `/`, `%`
+- **Logic**: `and`, `or`, `not`, `==`, `>`, `<`, `>=`, `<=`, `!=`
+- **Constants**: Numbers (`5`), strings (`'A'`), and booleans (`true`, `false`)
 
-### 12.2 Core Boolean and Comparison
-- `isEqual: [a, b]`
-- `isGreaterThan: [a, b]`
-- `isLessThan: [a, b]`
-- `not: [expr]`
-- `and: [expr, expr, ...]`
-- `or: [expr, expr, ...]`
+### 12.2 Global Functions
+- `count(list)`: Returns the integer length of a list or cards in a zone.
+- `rank_value(card_or_rank)`: Resolves an ordinal weight according to the deck's `rank_hierarchy`.
+- `top(zone)`: Returns the top card of a zone.
+- `bottom(zone)`: Returns the bottom card.
+- `owner(card)`: Returns the ID of the player currently controlling the card.
+- `filter(list, "expression")`: Returns a subset of elements. Inside the string expression, the local variable `card` is available.
+- `max(list)` / `min(list)` / `sum(list)` / `avg(list)`: Aggregations.
+- `exists(path)`: True if the path resolves to a valid entity.
+- `canPerform("ActionName", {params})`: Simulates action feasibility (dry-run).
 
-### 12.3 List and Aggregation
-- `any: [list_expr, predicate?]`  # if predicate omitted, truthy check
-- `all: [list_expr, predicate?]`
-- `count: [list_expr]`
-- `len: [list_expr or string]`
-- `max: [list_expr]`
-- `min: [list_expr]`
-- `contains: [list_expr, item_expr]`
-- `in: [item_expr, list_expr]`
-- `exists: [path_expr]`
+### 12.3 Examples
 
-### 12.4 Math
-- `add: [a, b]`
-- `sub: [a, b]`
-- `mul: [a, b]`
-- `div: [a, b]`
-- `mod: [a, b]`
-- `sum: [a, b, c, ...]`
-- `avg: [a, b, c, ...]`
+**Condition for entering War:**
+```yaml
+condition: "count($.players[0].zones.play_area) > 0 and count($.players[1].zones.play_area) > 0 and rank_value(top($.players[0].zones.play_area)) == rank_value(top($.players[1].zones.play_area))"
+```
 
-### 12.5 Card/Rank Helpers
-- `rank_value: [rank_or_card]`     # resolves using deck type’s `rank_hierarchy`
-
-### 12.6 Action Feasibility
-- `canPerform: [{ action: <ActionName>, ...params }]`  # optional; engines may simulate dry-run validation
-
-### 12.7 Operator Syntax Rules
-- One operator per object level; operator value is a list (operands) unless noted.
-- Operands themselves may be `value`, `path`, `ref`, or nested operator objects.
+**Checking card traits:**
+```yaml
+condition: "count(filter(ref:target_player.hand, 'card.rank == ref:target_rank')) > 0"
+```
 
 ---
 ## 13. Actions Vocabulary
@@ -752,36 +738,22 @@ rules:
         order: simultaneous
         do:
           - action: MOVE
-            from:
-              top:
-                - path: "$.players[$player].zones.player_deck"
-            to:
-              path: "$.players[$player].zones.play_area"
+            from: "top($.players[$player].zones.player_deck)"
+            to: "$.players[$player].zones.play_area"
 ```
 
 ```yaml examples/war_compare.yaml
 rules:
   - id: compare_cards_p1_wins
     trigger: on.phase.Compare
-    condition:
-      isGreaterThan:
-        - rank_value:
-            - top:
-                - path: "$.players[0].zones.play_area"
-        - rank_value:
-            - top:
-                - path: "$.players[1].zones.play_area"
+    condition: "rank_value(top($.players[0].zones.play_area)) > rank_value(top($.players[1].zones.play_area))"
     effect:
       - action: MOVE_ALL
-        from:
-          path: "$.players[0].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[0].zones.play_area"
+        to: "$.players[0].zones.winnings"
       - action: MOVE_ALL
-        from:
-          path: "$.players[1].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[1].zones.play_area"
+        to: "$.players[0].zones.winnings"
 ```
 
 ---

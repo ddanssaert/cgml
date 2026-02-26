@@ -1,6 +1,6 @@
 from typing import Any, Dict, Callable, List, Union, Optional
 
-from loader import Condition, Operand, EffectAction
+from loader import EffectAction
 
 
 def resolve_path(obj: Any, path: str, context: Optional[Dict[str, Any]] = None) -> Any:
@@ -127,18 +127,22 @@ def resolve_path(obj: Any, path: str, context: Optional[Dict[str, Any]] = None) 
             try:
                 current = current[part]
             except Exception:
-                raise AttributeError(f"Cannot resolve '{part}' in path '{path}' on {repr(current)}")
+                raise AttributeError(f"Cannot resolve '{part}' in path '{path}' on {type(current).__name__}")
     return current
 
 
 def get_rank_index(cgml_definition: Any, deck_type_name: str, rank_value: Any) -> int:
     """Looks up the numeric index of a rank in the deck's rank_hierarchy."""
+    if rank_value is None:
+        return -1
     rank_hierarchy = cgml_definition.components.component_types['deck_types'][deck_type_name].rank_hierarchy
     try:
         return [str(x) for x in rank_hierarchy].index(str(rank_value))
     except ValueError:
-        raise ValueError(f"Rank '{rank_value}' not found in rank_hierarchy: {rank_hierarchy}")
+        return -1  # Safe fallback for when comparing an empty zone's top card
 
+
+from ast_evaluator import evaluate_expression
 
 class RulesEngine:
     """Evaluates conditions and executes effects using an action registry."""
@@ -205,146 +209,37 @@ class RulesEngine:
 
     def evaluate_condition(
         self,
-        cond: Union[Condition, Dict, Any],
+        cond: Union[str, Dict, Any],
         game_state: Any,
         context: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """Recursively evaluates a Condition (pydantic model or dict node)."""
+        """Executes a string expression condition using ASTEvaluator."""
         context = context or {}
-
-        if not isinstance(cond, (Condition, dict)):
+        if not cond:
+            return True
+        if not isinstance(cond, str):
+            # Fallback for old tests or simple booleans
             return bool(cond)
-
-        if isinstance(cond, dict):
-            cond = Condition.parse_obj(cond)
-
-        if cond.isEqual is not None:
-            left = self.resolve_operand(cond.isEqual[0], game_state, context)
-            right = self.resolve_operand(cond.isEqual[1], game_state, context)
-            left, right = self._maybe_compare_ranks(left, right, game_state)
-            return left == right
-        if cond.isGreaterThan is not None:
-            left = self.resolve_operand(cond.isGreaterThan[0], game_state, context)
-            right = self.resolve_operand(cond.isGreaterThan[1], game_state, context)
-            left, right = self._maybe_compare_ranks(left, right, game_state)
-            return left > right
-        if cond.isLessThan is not None:
-            left = self.resolve_operand(cond.isLessThan[0], game_state, context)
-            right = self.resolve_operand(cond.isLessThan[1], game_state, context)
-            left, right = self._maybe_compare_ranks(left, right, game_state)
-            return left < right
-        if getattr(cond, "and_", None) is not None:
-            return all(self.evaluate_condition(sub, game_state, context) for sub in cond.and_)
-        if getattr(cond, "or_", None) is not None:
-            return any(self.evaluate_condition(sub, game_state, context) for sub in cond.or_)
-        if getattr(cond, "not_", None) is not None:
-            return not self.evaluate_condition(cond.not_, game_state, context)
-        if getattr(cond, "max_", None) is not None:
-            vals = [self.resolve_operand(x, game_state, context) for x in cond.max_]
-            return max(vals)
-        if getattr(cond, "min_", None) is not None:
-            vals = [self.resolve_operand(x, game_state, context) for x in cond.min_]
-            return min(vals)
-        if getattr(cond, "sum_", None) is not None:
-            vals = [self.resolve_operand(x, game_state, context) for x in cond.sum_]
-            flat_vals: List[Any] = []
-            for v in vals:
-                if isinstance(v, (list, tuple)):
-                    flat_vals.extend(v)
-                else:
-                    flat_vals.append(v)
-            return sum(flat_vals)
-        if getattr(cond, "count", None) is not None:
-            collection = cond.count
-            if isinstance(collection, list) and len(collection) == 1:
-                resolved = self.resolve_operand(collection[0], game_state, context)
-                return self._count_value(resolved)
-            elif isinstance(collection, (list, tuple)):
-                return len(collection)
-            else:
-                return self._count_value(collection)
-        if getattr(cond, "value", None) is not None:
-            return bool(cond.value)
-        if getattr(cond, "path", None) is not None:
-            return bool(resolve_path(game_state, cond.path, context))
-        if getattr(cond, "ref", None) is not None:
-            return bool(context.get(cond.ref))
-        return False
+        
+        return bool(evaluate_expression(cond, game_state, context, self))
 
     def resolve_operand(
         self,
-        operand: Union[Operand, Dict, Any],
+        operand: Union[str, Dict, Any],
         game_state: Any,
         context: Optional[Dict[str, Any]] = None
     ) -> Any:
-        """Resolves an operand node: can be Operand model, dict, or value."""
+        """Evaluate string arguments to actions (e.g. from='$.zones.deck', count='count($.players[0].hand)')."""
         context = context or {}
-
-        if isinstance(operand, dict):
-            operand = Operand.parse_obj(operand)
-        if isinstance(operand, Operand):
-            if operand.path is not None:
-                return resolve_path(game_state, operand.path, context)
-            if operand.value is not None:
-                return operand.value
-            if operand.ref is not None:
-                return context.get(operand.ref)
-            if operand.isEqual is not None:
-                return self.evaluate_condition(Condition(isEqual=operand.isEqual), game_state, context)
-            if operand.isGreaterThan is not None:
-                return self.evaluate_condition(Condition(isGreaterThan=operand.isGreaterThan), game_state, context)
-            if operand.isLessThan is not None:
-                return self.evaluate_condition(Condition(isLessThan=operand.isLessThan), game_state, context)
-            if getattr(operand, "and_", None) is not None:
-                return self.evaluate_condition(Condition(and_=operand.and_), game_state, context)
-            if getattr(operand, "or_", None) is not None:
-                return self.evaluate_condition(Condition(or_=operand.or_), game_state, context)
-            if getattr(operand, "not_", None) is not None:
-                return self.evaluate_condition(Condition(not_=operand.not_), game_state, context)
-            if getattr(operand, "max_", None) is not None:
-                vals = [self.resolve_operand(x, game_state, context) for x in operand.max_]
-                return max(vals)
-            if getattr(operand, "min_", None) is not None:
-                vals = [self.resolve_operand(x, game_state, context) for x in operand.min_]
-                return min(vals)
-            if getattr(operand, "sum_", None) is not None:
-                vals = [self.resolve_operand(x, game_state, context) for x in operand.sum_]
-                flat_vals: List[Any] = []
-                for v in vals:
-                    if isinstance(v, (list, tuple)):
-                        flat_vals.extend(v)
-                    else:
-                        flat_vals.append(v)
-                return sum(flat_vals)
-            if getattr(operand, "count", None) is not None:
-                collection = operand.count
-                if isinstance(collection, list) and len(collection) == 1:
-                    resolved = self.resolve_operand(collection[0], game_state, context)
-                    return self._count_value(resolved)
-                elif isinstance(collection, (list, tuple)):
-                    return len(collection)
-                else:
-                    return self._count_value(collection)
-            if getattr(operand, "rank_value", None) is not None:
-                return self._op_rank_value(operand.rank_value[0], game_state, context)
-            if getattr(operand, "top", None) is not None:
-                container = self.resolve_operand(operand.top[0], game_state, context)
-                card = None
-                if hasattr(container, 'cards') and isinstance(container.cards, list):
-                    card = container.cards[-1] if container.cards else None
-                elif isinstance(container, list):
-                    card = container[-1] if container else None
-                return card
-            if getattr(operand, "all_items", None) is not None:
-                container = self.resolve_operand(operand.all_items[0], game_state, context)
-                if hasattr(container, 'cards') and isinstance(container.cards, list):
-                    return list(container.cards)
-                return list(container) if isinstance(container, (list, tuple)) else []
-            if getattr(operand, "add", None) is not None:
-                vals = [self.resolve_operand(x, game_state, context) for x in operand.add]
-                return sum(vals)
-            if getattr(operand, "list_", None) is not None:
-                return [self.resolve_operand(x, game_state, context) for x in operand.list_]
+        if isinstance(operand, str):
+            try:
+                # If it's a raw string like "player.current.hand", AST will evaluate it to the object
+                return evaluate_expression(operand, game_state, context, self)
+            except Exception as e:
+                # If AST parsing fails, fallback strings (like literals)
+                import logging
+                logging.getLogger(__name__).debug(f"Failed to evaluate expression '{operand}': {e}. Falling back to string mode.")
+                return operand
         return operand
 
     def execute_effect(self, effect_list: List[EffectAction], game_state: Any, context: Optional[Dict[str, Any]] = None) -> None:
@@ -368,7 +263,8 @@ class RulesEngine:
                     elif isinstance(players_list, list):
                         if p in players_list or (isinstance(players_list[0], int) and idx in players_list):
                             indices.append(idx)
-                do_actions = getattr(action_def, 'do', None)
+                do_actions = getattr(action_def, 'do_', None)
+                print(f"[DEBUG engine] FOR_EACH_PLAYER matched {len(indices)} players. do_actions is ({len(do_actions) if do_actions else 0}): {do_actions}")
                 if isinstance(do_actions, list) and do_actions:
                     for idx in indices:
                         local_ctx = dict(context)
@@ -382,6 +278,86 @@ class RulesEngine:
                     context['$foreach_pending'] = True
                     i += 1
                     continue
+
+            elif action_name == "FOR_EACH":
+                in_val = self.resolve_operand(action_def.dict(by_alias=True).get("in"), game_state, context)
+                if not in_val:
+                    i += 1
+                    continue
+                if not isinstance(in_val, list):
+                    if hasattr(in_val, "cards"):
+                        in_val = in_val.cards
+                    else:
+                        in_val = [in_val]
+                        
+                do_actions = getattr(action_def, 'do_', None) or action_def.dict(by_alias=True).get("do")
+                if do_actions:
+                    for item in in_val:
+                        ctx = context.copy()
+                        ctx['item'] = item
+                        self.execute_effect(do_actions, game_state, ctx)
+                i += 1
+                continue
+
+            elif action_name == "INCREMENT_VARIABLE":
+                path_str = action_def.dict(by_alias=True).get("path")
+                val_str = action_def.dict(by_alias=True).get("value", 1)
+                
+                # evaluate value
+                val = evaluate_expression(val_str, game_state, context, self) if isinstance(val_str, str) else val_str
+                
+                # resolve path
+                parts = path_str.split('.')
+                target = evaluate_expression('.'.join(parts[:-1]), game_state, context, self)
+                if target:
+                    attr = parts[-1]
+                    if isinstance(target, dict):
+                        target[attr] = target.get(attr, 0) + val
+                    else:
+                        setattr(target, attr, getattr(target, attr, 0) + val)
+                i += 1
+                continue
+
+            elif action_name == "FIND_AND_STORE":
+                in_val = self.resolve_operand(action_def.dict(by_alias=True).get("in"), game_state, context)
+                if not in_val:
+                    i += 1
+                    continue
+                if not isinstance(in_val, list):
+                    if hasattr(in_val, "cards"):
+                        in_val = in_val.cards
+                    else:
+                        in_val = [in_val]
+                        
+                group_by = action_def.dict(by_alias=True).get("group_by")
+                having = action_def.dict(by_alias=True).get("having")
+                store_as = action_def.dict(by_alias=True).get("store_as")
+                if not store_as: 
+                    i += 1
+                    continue
+                
+                if group_by:
+                    groups = {}
+                    for item in in_val:
+                        ctx_copy = context.copy()
+                        ctx_copy['card'] = item 
+                        val = evaluate_expression(group_by, game_state, ctx_copy, self)
+                        groups.setdefault(val, []).append(item)
+                        
+                    result_groups = []
+                    for k, v in groups.items():
+                        if having:
+                            ctx_copy = context.copy()
+                            ctx_copy['group'] = v
+                            if evaluate_expression(having, game_state, ctx_copy, self):
+                                result_groups.append(k)
+                        else:
+                            result_groups.append(k)
+                    context[store_as] = result_groups
+                else:
+                    context[store_as] = in_val
+                i += 1
+                continue
 
             # Normal action execution (with optional foreach-pending fan-out)
             action_func = self.actions.get(action_name) or self.actions.get(action_name.upper())
@@ -397,7 +373,10 @@ class RulesEngine:
                         raw_params = action_def.dict(exclude={"action"}, by_alias=False, exclude_none=True)
                         params: Dict[str, Any] = {}
                         for k, v in raw_params.items():
-                            if isinstance(v, (dict, list)):
+                            if k == "store_as":
+                                params[k] = v
+                                continue
+                            if isinstance(v, (dict, list, str)):
                                 params[k] = self.resolve_operand(v, game_state, context)
                             else:
                                 params[k] = v
@@ -411,7 +390,10 @@ class RulesEngine:
                     raw_params = action_def.dict(exclude={"action"}, by_alias=False, exclude_none=True)
                     params: Dict[str, Any] = {}
                     for k, v in raw_params.items():
-                        if isinstance(v, (dict, list)):
+                        if k == "store_as":
+                            params[k] = v
+                            continue
+                        if isinstance(v, (dict, list, str)):
                             params[k] = self.resolve_operand(v, game_state, context)
                         else:
                             params[k] = v

@@ -18,7 +18,6 @@ if not logger.handlers:
     logger.addHandler(ch)
 
 # --- Action Registry Setup ---
-<<<<<<< Updated upstream
 
 def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, context=None, **kwargs):
     """MOVE cards between zones.
@@ -27,10 +26,12 @@ def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int]
     - to: Zone or path-like resolved object.
     - count: number of cards (defaults to 1). Ignored when from_ is a Card.
     """
-    from src.state import find_zone, move_cards, find_card_zone
+    from state import find_zone, move_cards, find_card_zone
 
+    print(f"[DEBUG move_action] from_ type: {type(from_)}, to type: {type(to)}")
     # Graceful no-op if there is nothing to move or destination missing
     if from_ is None or to is None:
+        print("[DEBUG move_action] Aborting: from_ or to is None")
         return
 
     # Normalize count
@@ -60,45 +61,81 @@ def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int]
 
 
 def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, context=None, **kwargs):
-    from src.state import find_zone, move_all_cards
+    from state import find_zone, move_all_cards
     # Graceful no-op if params are missing
     if from_ is None or to is None:
         return
     from_zone = from_ if hasattr(from_, 'cards') else find_zone(game_state, from_)
     to_zone = to if hasattr(to, 'cards') else find_zone(game_state, to)
-=======
-def move_action(game_state: GameState, from_: str, to: str, count: int = 1, context=None, **kwargs):
-    # Implement the move cards logic, possibly reusing functions from state
-    from state import find_zone, move_cards
-    p = None
-    # Resolve player context if needed. (Assume for now moves affect shared or per-player zones)
-    from_zone = find_zone(game_state, from_, p)
-    to_zone = find_zone(game_state, to, p)
-    move_cards(from_zone, to_zone, count)
-
-def move_all_action(game_state, from_, to, context=None, **kwargs):
-    from state import find_zone, move_all_cards
-    from_zone = find_zone(game_state, from_)
-    to_zone = find_zone(game_state, to)
->>>>>>> Stashed changes
     move_all_cards(from_zone, to_zone)
 
 
 def set_game_state_action(game_state: GameState, state: str, context=None, **kwargs):
     game_state.current_state = state
 
-<<<<<<< Updated upstream
 
 def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs):
-    from src.state import find_zone, shuffle_zone
-    zone = target if hasattr(target, 'cards') else find_zone(game_state, target)
-=======
-def shuffle_action(game_state: GameState, target: str, context=None, **kwargs):
     from state import find_zone, shuffle_zone
-    zone = find_zone(game_state, target)
->>>>>>> Stashed changes
+    zone = target if hasattr(target, 'cards') else find_zone(game_state, target)
     shuffle_zone(zone)
 
+
+def draw_action(game_state: GameState, player: Any, count: Any = 1, from_: Any = None, store_as: Any = None, context=None, **kwargs):
+    from state import find_zone, move_cards
+    
+    if from_ is None:
+        from_ = "$.zones.deck"
+        
+    try:
+        cnt = int(count) if count is not None else 1
+    except Exception:
+        cnt = 1
+        
+    from_zone = find_zone(game_state, from_) if isinstance(from_, str) else from_
+    
+    if player == 'current':
+        current_idx = context.get('$player', 0)
+        p = game_state.players[current_idx]
+    else:
+        p = player if not isinstance(player, str) else None # Simplify for now
+        
+    if p is None: return
+    
+    to_zone = p.zones.get('hand')
+    
+    if from_zone and to_zone:
+        drawn = []
+        for _ in range(min(cnt, len(from_zone.cards))):
+            c = from_zone.cards.pop()
+            to_zone.cards.append(c)
+            drawn.append(c)
+            
+        if store_as and context is not None:
+            if len(drawn) == 1:
+                context[store_as] = drawn[0]
+            else:
+                context[store_as] = drawn
+
+def request_input_action(game_state: GameState, player: Any, prompt: Any = None, options: Any = None, filter: Any = None, store_as: Any = None, context=None, **kwargs):
+    # Dummy mock for automated test.
+    if context and store_as:
+        if options and options.get('type') == 'player':
+            current_idx = context.get('$player', 0)
+            opponent = next((p for i, p in enumerate(game_state.players) if i != current_idx), game_state.players[-1])
+            context[store_as] = opponent
+        elif options and options.get('type') == 'rank':
+            current_idx = context.get('$player', 0)
+            hand_zone = game_state.players[current_idx].zones.get('hand')
+            if hand_zone and hand_zone.cards:
+                context[store_as] = hand_zone.cards[0].properties.get('rank', 'A')
+            else:
+                context[store_as] = 'A'
+        else:
+            context[store_as] = "mock_selection"
+
+def repeat_turn_action(game_state: GameState, context=None, **kwargs):
+    if context is not None:
+        context['$repeat_turn'] = True
 
 # Extendable action registry (subset needed for war.yml)
 ACTION_REGISTRY = {
@@ -107,6 +144,9 @@ ACTION_REGISTRY = {
     "SET_GAME_STATE": set_game_state_action,  # alias for SET_STATE
     "SET_STATE": set_game_state_action,
     "SHUFFLE": shuffle_action,
+    "DRAW": draw_action,
+    "REQUEST_INPUT": request_input_action,
+    "REPEAT_TURN": repeat_turn_action,
 }
 
 
@@ -124,6 +164,15 @@ class GameSimulator:
         self.game_state.current_state = self.flow.initial_state
         self.current_player_idx = 0
         self.phase_idx = 0
+        self._update_context()
+
+    def _update_context(self):
+        self.context = {
+            '$player': self.current_player_idx,
+            'player': {
+                'current': self.game_state.players[self.current_player_idx]
+            }
+        }
 
     def _initialize_state(self, cgml_def: Any) -> GameState:
         state = build_game_state_from_cgml(cgml_def, self.player_count)
@@ -136,7 +185,7 @@ class GameSimulator:
         current_phase = self._current_phase()
         for rule in self.cgml_definition.rules:
             if rule.trigger == f"on.phase.{current_phase}":
-                if not rule.condition or self.rules_engine.evaluate_condition(rule.condition, self.game_state):
+                if not rule.condition or self.rules_engine.evaluate_condition(rule.condition, self.game_state, self.context):
                     if rule.effect:
                         legal_actions.append({
                             "rule_id": rule.id,
@@ -159,11 +208,12 @@ class GameSimulator:
     def _check_state_transitions(self) -> bool:
         transitions = self.flow.transitions or []
         for t in transitions:
-            if t.from_ == self.game_state.current_state:
-                if not t.condition or self.rules_engine.evaluate_condition(t.condition, self.game_state):
-                    self.game_state.current_state = t.to
-                    self.phase_idx = 0
-                    return True
+            if self.game_state.current_state != t.from_:
+                continue
+            if not t.condition or self.rules_engine.evaluate_condition(t.condition, self.game_state, self.context):
+                self.game_state.current_state = t.to
+                self.phase_idx = 0
+                return True
         return False
 
     def run(self) -> None:
@@ -219,7 +269,13 @@ class GameSimulator:
             logger.debug(
                 f"Executing action (rule_id={selected_action['rule_id']}) with effect: {selected_action['effect']}"
             )
-            self.rules_engine.execute_effect(selected_action['effect'], self.game_state)
+            self.rules_engine.execute_effect(selected_action['effect'], self.game_state, self.context)
+
+            if self.context.get('$repeat_turn'):
+                logger.debug(f"Action triggered REPEAT_TURN. Restarting phase cycle for player {self.current_player_idx}.")
+                self.context['$repeat_turn'] = False
+                self.phase_idx = 0
+                continue
 
             if self.game_state.current_state != prev_state_name:
                 logger.debug(f"State changed {prev_state_name} -> {self.game_state.current_state}; resetting phase index.")
@@ -253,6 +309,7 @@ class GameSimulator:
         old_idx = self.current_player_idx
         self.current_player_idx = (self.current_player_idx + 1) % num_players
         logger.debug(f"Advanced turn: player {old_idx} -> {self.current_player_idx}")
+        self._update_context()
 
     def _advance_phase(self) -> bool:
         phases = self._get_phases_for_state(self.game_state.current_state)
@@ -276,6 +333,6 @@ class GameSimulator:
 
 # --- Usage Example ---
 if __name__ == "__main__":
-    cgml = load_cgml_file("../war.yml")  # or any other CGML .yml game file
+    cgml = load_cgml_file("war.yml")  # or any other CGML .yml game file
     simulator = GameSimulator(cgml, player_count=2)
     simulator.run()
