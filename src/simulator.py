@@ -260,8 +260,9 @@ class GameSimulator:
                     continue
 
                 if not self._advance_phase():
-                    logger.debug("No more phases to advance. Breaking simulation loop.")
-                    break
+                    if not self._get_phases_for_state(self.game_state.current_state):
+                        logger.debug("No phases in current state. Breaking simulation loop.")
+                        break
                 continue
 
             prev_state_name = self.game_state.current_state
@@ -333,6 +334,8 @@ class GameSimulator:
 
 # --- Usage Example ---
 if __name__ == "__main__":
-    cgml = load_cgml_file("war.yml")  # or any other CGML .yml game file
+    import sys
+    game_file = sys.argv[1] if len(sys.argv) > 1 else "wippen.yml"
+    cgml = load_cgml_file(game_file)
     simulator = GameSimulator(cgml, player_count=2)
     simulator.run()

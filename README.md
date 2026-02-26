@@ -392,6 +392,9 @@ Expressions are evaluated in a safe sandbox supporting standard mathematical and
 - `bottom(zone)`: Returns the bottom card.
 - `owner(card)`: Returns the ID of the player currently controlling the card.
 - `filter(list, "expression")`: Returns a subset of elements. Inside the string expression, the local variable `card` is available.
+- `map(list, "expression")`: Transforms elements into a new list. The local variable `card` (or `group` contextually) is available.
+- `all(list, "expression")`: Returns true if all elements match the given conditional expression.
+- `any(list, "expression")`: Returns true if any element matches the given conditional expression.
 - `max(list)` / `min(list)` / `sum(list)` / `avg(list)`: Aggregations.
 - `exists(path)`: True if the path resolves to a valid entity.
 - `canPerform("ActionName", {params})`: Simulates action feasibility (dry-run).
@@ -552,6 +555,18 @@ Notes
 
 ### 13.4 Variables and State
 ```yaml examples/actions_state.yaml
+# FIND_AND_STORE
+- action: FIND_AND_STORE
+  in: "$.zones.table"
+  filter: "card.properties.rank == ref:played_card.rank"
+  store_as: matched_card
+
+# SET_PROPERTY
+- action: SET_PROPERTY
+  in: "$.variables"
+  property: "last_capturer"
+  value: "player.current.id"
+
 # SET_VARIABLE
 - action: SET_VARIABLE
   path:
@@ -561,11 +576,10 @@ Notes
       - path: "$.players[current].score"
       - value: 1
 
-# INCREMENT
-- action: INCREMENT
-  path:
-    path: "$.turns_taken"
-  by: 1
+# INCREMENT_VARIABLE
+- action: INCREMENT_VARIABLE
+  path: "$.turns_taken"
+  value: 1
 
 # SET_STATE (alias: SET_GAME_STATE)
 - action: SET_STATE
@@ -604,11 +618,21 @@ Notes
 # REQUEST_INPUT
 - action: REQUEST_INPUT
   player: current
-  prompt: "Choose a rank"
+  prompt: "Choose a card to play"
   options:
-    value: ["2","3","4","5","6","7","8","9","10","J","Q","K","A"]
-  multiselect: false
-  store_as: desired_rank
+    type: card
+    from: "$.players[current].hand"
+  store_as: played_card
+
+# REQUEST_INPUT (with complex constraints constraint based matching)
+- action: REQUEST_INPUT
+  player: current
+  prompt: "Select cards to capture"
+  options:
+    type: card_set
+    from: "$.zones.table"
+    constraint: "sum(map(group, 'rank_value(card)')) == rank_value(ref:played_card)"
+  store_as: captured_set
 ```
 
 ### 13.7 Control and Structure
@@ -616,15 +640,20 @@ Notes
 # FOR_EACH_PLAYER (simultaneous flip)
 - action: FOR_EACH_PLAYER
   order: simultaneous
-  players:
-    path: "$.players[*]"
+  players: "$.players"
   do:
     - action: MOVE
-      from:
-        top:
-          - path: "$.players[$player].zones.player_deck"
-      to:
-        path: "$.players[$player].zones.play_area"
+      from: "top($.players[$player].zones.player_deck)"
+      to: "$.players[$player].zones.play_area"
+
+# FOR_EACH (iterate over items in a list or zone)
+- action: FOR_EACH
+  in: "ref:captured_set"
+  do:
+    - action: MOVE
+      from: "$.zones.table"
+      to: "player.current.captured"
+      filter: "card.id == ref:item.id"
 
 # PARALLEL (wait for all branches)
 - action: PARALLEL
@@ -804,8 +833,8 @@ isEqual:
 
 ### v1.3
 - Added path/selector language with anchors (`$currentPlayer`, `top()`, `count()`, `rank_value()`).
-- Expanded operators: `add`, `sub`, `mul`, `div`, `mod`, `sum`, `avg`, `len`, `contains`, `in`, `exists`, `rank_value`, `canPerform`.
-- Standardized actions: `DEAL_ROUND_ROBIN`, `DEAL_ALL`, `MOVE_ALL`, `REVEAL`, `CONCEAL`, `FLIP`, `PEEK`, `LOOK`, `REORDER`, `CHOOSE_RANDOM`, `SEARCH_ZONE`, `MILL`, `REVEAL_MATCHING`, `FOR_EACH_PLAYER`, `PARALLEL`, `IF`, `SKIP_TURN`, `EXTRA_TURN`, `REVERSE_ORDER`, `INSERT_PHASE`, `REMOVE_PHASE`.
+- Expanded operators: `add`, `sub`, `mul`, `div`, `mod`, `sum`, `avg`, `len`, `contains`, `in`, `exists`, `rank_value`, `canPerform`, `list`, `map`, `filter`, `all`, `any`.
+- Standardized actions: `DEAL_ROUND_ROBIN`, `DEAL_ALL`, `MOVE_ALL`, `REVEAL`, `CONCEAL`, `FLIP`, `PEEK`, `LOOK`, `REORDER`, `CHOOSE_RANDOM`, `SEARCH_ZONE`, `MILL`, `REVEAL_MATCHING`, `FOR_EACH_PLAYER`, `FOR_EACH`, `PARALLEL`, `IF`, `SKIP_TURN`, `EXTRA_TURN`, `REVERSE_ORDER`, `INSERT_PHASE`, `REMOVE_PHASE`, `FIND_AND_STORE`, `SET_PROPERTY`, `INCREMENT_VARIABLE`.
 - Formalized simultaneity semantics and flow modifiers.
 - Introduced rule fields: `timing` (pre/post/replace), `priority`, `once_per`, `enabled_when`, `on_failure`.
 - Clarified imports/inheritance merge semantics and array identity by id/name.

@@ -115,6 +115,8 @@ class EffectAction(BaseModel):
     players: Optional[str] = None
     order: Optional[str] = None
     do_: Optional[List["EffectAction"]] = Field(None, alias="do")
+    options: Optional[Dict[str, Any]] = None
+    property: Optional[str] = None
 
     class Config:
         extra = "allow"

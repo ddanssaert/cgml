@@ -240,7 +240,19 @@ class ASTEvaluator(ast.NodeVisitor):
             return min(args[0] if len(args) == 1 else args)
         elif func_name in ('sum', 'add'):
             val = args[0] if len(args) == 1 and isinstance(args[0], list) else args
-            return sum(val)
+            if hasattr(val, '__iter__') and not isinstance(val, str):
+                return sum([float(x) if isinstance(x, str) and x.replace('.','',1).isdigit() else int(x) if isinstance(x, (int, float)) else 0 for x in val])
+            return val
+        elif func_name == 'all':
+            seq = args[0] if len(args) == 1 and isinstance(args[0], list) else args
+            if hasattr(seq, '__iter__') and not isinstance(seq, str):
+                return all(bool(x) for x in seq)
+            return bool(seq)
+        elif func_name == 'any':
+            seq = args[0] if len(args) == 1 and isinstance(args[0], list) else args
+            if hasattr(seq, '__iter__') and not isinstance(seq, str):
+                return any(bool(x) for x in seq)
+            return bool(seq)
         else:
             raise NameError(f"Unsupported function: {func_name}")
 

@@ -318,6 +318,15 @@ class RulesEngine:
                 i += 1
                 continue
 
+            elif action_name == "IF":
+                condition = action_def.condition
+                do_actions = getattr(action_def, 'do_', None) or action_def.dict(by_alias=True).get("do")
+                if self.evaluate_condition(condition, game_state, context):
+                    if do_actions:
+                        self.execute_effect(do_actions, game_state, context)
+                i += 1
+                continue
+
             elif action_name == "FIND_AND_STORE":
                 in_val = self.resolve_operand(action_def.dict(by_alias=True).get("in"), game_state, context)
                 if not in_val:
@@ -358,6 +367,62 @@ class RulesEngine:
                     context[store_as] = in_val
                 i += 1
                 continue
+
+            elif action_name == "SET_PROPERTY":
+                in_val = self.resolve_operand(action_def.dict(by_alias=True).get("in"), game_state, context)
+                if not in_val:
+                    i += 1
+                    continue
+                if not isinstance(in_val, list):
+                    if hasattr(in_val, "cards"):
+                        in_val = in_val.cards
+                    else:
+                        in_val = [in_val]
+                        
+                prop_name = action_def.dict(by_alias=True).get("property")
+                prop_val_str = action_def.dict(by_alias=True).get("value")
+                prop_val = evaluate_expression(prop_val_str, game_state, context, self) if isinstance(prop_val_str, str) else prop_val_str
+                
+                if prop_name:
+                    for item in in_val:
+                        if isinstance(item, dict):
+                            item[prop_name] = prop_val
+                        else:
+                            setattr(item, prop_name, prop_val)
+                i += 1
+                continue
+
+            elif action_name == "REQUEST_INPUT":
+                options = action_def.dict(by_alias=True).get("options") or {}
+                store_as = action_def.dict(by_alias=True).get("store_as")
+                if options.get("type") == "card_set" and store_as:
+                    from_zone = self.resolve_operand(options.get("from"), game_state, context)
+                    constraint = options.get("constraint")
+                    
+                    found_set = []
+                    if from_zone and hasattr(from_zone, "cards") and constraint:
+                        import itertools
+                        cards = from_zone.cards
+                        # Try all combinations (largest first is better for Wippen)
+                        success = False
+                        for r in range(len(cards), 0, -1):
+                            for combo in itertools.combinations(cards, r):
+                                ctx_copy = context.copy()
+                                ctx_copy['group'] = list(combo)
+                                try:
+                                    if evaluate_expression(constraint, game_state, ctx_copy, self):
+                                        found_set = list(combo)
+                                        success = True
+                                        break
+                                except Exception:
+                                    pass
+                            if success: break
+                            
+                    context[store_as] = found_set
+                    i += 1
+                    continue
+                # If not a native card_set, fall through to the registry mocked action
+
 
             # Normal action execution (with optional foreach-pending fan-out)
             action_func = self.actions.get(action_name) or self.actions.get(action_name.upper())

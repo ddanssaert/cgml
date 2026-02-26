@@ -1,0 +1,165 @@
+cgml_version: 1.3
+meta:
+  name: "Wippen (Casino)"
+  author: "CGML Engine"
+  description: "A Dutch fishing card game where players capture cards from the table by matching ranks or summing values."
+  players:
+    min: 2
+    max: 2
+
+components:
+  component_types:
+    deck_types:
+      standard_52:
+        composition:
+          - type: template
+            template: standard_suits
+            values: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
+        rank_hierarchy: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
+  decks:
+    main_deck:
+      type: standard_52
+  zones:
+    - name: deck
+      type: deck
+      of_deck: main_deck
+    - name: table
+      type: public
+    - name: hand
+      type: hand
+      per_player: true
+    - name: captured
+      type: private
+      per_player: true
+    - name: score_pile
+      type: private
+      per_player: true
+  variables:
+    - name: wips
+      per_player: true
+      initial_value: 0
+    - name: last_capturer
+      initial_value: -1
+
+setup:
+  - action: SHUFFLE
+    target: $.zones.deck
+  - action: DEAL
+    from: $.zones.deck
+    to: $.players[*].hand
+    count: 4
+  - action: MOVE
+    from: $.zones.deck
+    to: $.zones.table
+    count: 4
+
+flow:
+  initial_state: Playing
+  player_order: clockwise
+  states:
+    Playing:
+      phases:
+        - CheckReload
+        - PlayCard
+        - Capture
+        - CheckWip
+        - Cleanup
+    GameOver:
+      phases: []
+  transitions:
+    - from: Playing
+      to: GameOver
+      condition: "count($.zones.deck) == 0 and count($.players[0].hand) == 0 and count($.players[1].hand) == 0"
+  win_condition:
+    evaluator: "null" # Wippen uses complex scoring; handled before transition to GameOver
+
+rules:
+  - id: check_reload
+    trigger: on.phase.CheckReload
+    condition: "count($.players[0].hand) == 0 and count($.players[1].hand) == 0 and count($.zones.deck) > 0"
+    description: "If both hands are empty, deal 4 new cards to each player."
+    effect:
+      - action: FOR_EACH_PLAYER
+        order: simultaneous
+        players: "$.players"
+        do:
+          - action: MOVE
+            from: "$.zones.deck"
+            to: "$.players[$player].hand"
+            count: 4
+
+  - id: play_card
+    trigger: on.phase.PlayCard
+    description: "Player plays a single card."
+    effect:
+      - action: REQUEST_INPUT
+        player: current
+        prompt: "Choose a card to play."
+        options:
+          type: card
+          from: player.current.hand
+        store_as: played_card
+
+  - id: capture_cards
+    trigger: on.phase.Capture
+    description: "Player attempts to capture cards from the table."
+    effect:
+      - action: REQUEST_INPUT
+        player: current
+        prompt: "Select cards from the table to capture that sum to or match the played card."
+        options:
+          type: card_set
+          from: $.zones.table
+          # In a real engine, the UI validates this constraint.
+          # For pictures (J, Q, K), rank_value is 11, 12, 13.
+          constraint: "sum(map(group, 'rank_value(card)')) == rank_value(ref:played_card) or (count(group) == 1 and group[0].rank == ref:played_card.rank)"
+        store_as: captured_set
+      - action: IF
+        condition: "count(ref:captured_set) > 0"
+        do:
+          # Move the captured cards and the played card to the player's captured zone
+          - action: FOR_EACH
+            in: ref:captured_set
+            do:
+              - action: MOVE
+                from: $.zones.table
+                to: player.current.captured
+                filter: "card.id == ref:item.id"
+          - action: MOVE
+            from: player.current.hand
+            to: player.current.captured
+            filter: "card.id == ref:played_card.id"
+          - action: SET_PROPERTY
+            in: $.variables
+            property: last_capturer
+            value: "player.current.id"
+      - action: IF
+        condition: "count(ref:captured_set) == 0"
+        do:
+          # If no capture, the played card goes to the table
+          - action: MOVE
+            from: player.current.hand
+            to: $.zones.table
+            filter: "card.id == ref:played_card.id"
+
+  - id: check_wip
+    trigger: on.phase.CheckWip
+    condition: "count($.zones.table) == 0 and count(ref:captured_set) > 0 and count($.zones.deck) > 0"
+    description: "If the table is cleared by a capture (and it's not the final hand), it's a Wip!"
+    effect:
+      - action: INCREMENT_VARIABLE
+        path: "player.current.wips"
+        value: 1
+
+  - id: end_game_sweep
+    trigger: on.state_transition
+    condition: "event.to == 'GameOver'"
+    description: "When the game ends, the last person to capture gets the remaining table cards."
+    effect:
+      - action: IF
+        condition: "$.variables.last_capturer != -1"
+        do:
+          - action: MOVE_ALL
+            from: $.zones.table
+            to: "$.players[$.variables.last_capturer].captured"
+      # Scoring is very complex, so we will handle it dynamically in the simulator or by inspecting stats natively
