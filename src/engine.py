@@ -1,6 +1,6 @@
 from typing import Any, Dict, Callable, List, Union, Optional
 
-from src.loader import Condition, Operand, EffectAction
+from loader import Condition, Operand, EffectAction
 
 
 def resolve_path(obj: Any, path: str, context: Optional[Dict[str, Any]] = None) -> Any:

@@ -1,13 +1,13 @@
 from typing import Any, Dict, List, Optional
 import random
 import logging
-from src.engine import RulesEngine
-from src.state import (
+from engine import RulesEngine
+from state import (
     GameState,
     build_game_state_from_cgml,
     run_setup_phase,
 )
-from src.loader import load_cgml_file
+from loader import load_cgml_file
 
 # Set up debug logger
 logger = logging.getLogger("simulator")
@@ -18,6 +18,7 @@ if not logger.handlers:
     logger.addHandler(ch)
 
 # --- Action Registry Setup ---
+<<<<<<< Updated upstream
 
 def move_action(game_state: GameState, from_: Any, to: Any, count: Optional[int] = 1, context=None, **kwargs):
     """MOVE cards between zones.
@@ -65,16 +66,37 @@ def move_all_action(game_state: GameState, from_: Any = None, to: Any = None, co
         return
     from_zone = from_ if hasattr(from_, 'cards') else find_zone(game_state, from_)
     to_zone = to if hasattr(to, 'cards') else find_zone(game_state, to)
+=======
+def move_action(game_state: GameState, from_: str, to: str, count: int = 1, context=None, **kwargs):
+    # Implement the move cards logic, possibly reusing functions from state
+    from state import find_zone, move_cards
+    p = None
+    # Resolve player context if needed. (Assume for now moves affect shared or per-player zones)
+    from_zone = find_zone(game_state, from_, p)
+    to_zone = find_zone(game_state, to, p)
+    move_cards(from_zone, to_zone, count)
+
+def move_all_action(game_state, from_, to, context=None, **kwargs):
+    from state import find_zone, move_all_cards
+    from_zone = find_zone(game_state, from_)
+    to_zone = find_zone(game_state, to)
+>>>>>>> Stashed changes
     move_all_cards(from_zone, to_zone)
 
 
 def set_game_state_action(game_state: GameState, state: str, context=None, **kwargs):
     game_state.current_state = state
 
+<<<<<<< Updated upstream
 
 def shuffle_action(game_state: GameState, target: Any, context=None, **kwargs):
     from src.state import find_zone, shuffle_zone
     zone = target if hasattr(target, 'cards') else find_zone(game_state, target)
+=======
+def shuffle_action(game_state: GameState, target: str, context=None, **kwargs):
+    from state import find_zone, shuffle_zone
+    zone = find_zone(game_state, target)
+>>>>>>> Stashed changes
     shuffle_zone(zone)
 
 
