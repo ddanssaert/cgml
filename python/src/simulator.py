@@ -335,7 +335,7 @@ class GameSimulator:
 # --- Usage Example ---
 if __name__ == "__main__":
     import sys
-    game_file = sys.argv[1] if len(sys.argv) > 1 else "wippen.yml"
+    game_file = sys.argv[1] if len(sys.argv) > 1 else "games/wippen.yml"
     cgml = load_cgml_file(game_file)
     simulator = GameSimulator(cgml, player_count=2)
     simulator.run()

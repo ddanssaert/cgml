@@ -167,8 +167,7 @@ if __name__ == "__main__":
     import json
 
     # Generate the JSON schema for the top-level CgmlDefinition model
-    schema = CgmlDefinition.model_json_schema()  # For Pydantic v2+
-    # If using Pydantic v1.x, use: schema = CgmlDefinition.schema()
+    schema = CgmlDefinition.schema()
 
     with open("../cgml.schema.json", "w") as f:
         json.dump(schema, f, indent=2)

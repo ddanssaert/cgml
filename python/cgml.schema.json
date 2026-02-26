@@ -1,0 +1,503 @@
+{
+  "title": "CgmlDefinition",
+  "type": "object",
+  "properties": {
+    "cgml_version": {
+      "title": "Cgml Version",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "meta": {
+      "$ref": "#/definitions/Meta"
+    },
+    "imports": {
+      "title": "Imports",
+      "type": "array",
+      "items": {}
+    },
+    "components": {
+      "$ref": "#/definitions/Components"
+    },
+    "setup": {
+      "title": "Setup",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Action"
+      }
+    },
+    "flow": {
+      "$ref": "#/definitions/Flow"
+    },
+    "rules": {
+      "title": "Rules",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Rule"
+      }
+    }
+  },
+  "required": [
+    "cgml_version",
+    "meta",
+    "components",
+    "setup",
+    "flow",
+    "rules"
+  ],
+  "definitions": {
+    "PlayerSpec": {
+      "title": "PlayerSpec",
+      "type": "object",
+      "properties": {
+        "min": {
+          "title": "Min",
+          "type": "integer"
+        },
+        "max": {
+          "title": "Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "Meta": {
+      "title": "Meta",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "players": {
+          "$ref": "#/definitions/PlayerSpec"
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "author",
+        "description",
+        "players"
+      ]
+    },
+    "ComponentTypeDef": {
+      "title": "ComponentTypeDef",
+      "type": "object",
+      "properties": {
+        "composition": {
+          "title": "Composition",
+          "type": "array",
+          "items": {}
+        },
+        "ordering": {
+          "title": "Ordering",
+          "type": "string"
+        },
+        "visibility": {
+          "title": "Visibility",
+          "type": "object"
+        },
+        "rank_hierarchy": {
+          "title": "Rank Hierarchy",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "DeckInstance": {
+      "title": "DeckInstance",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "type"
+      ]
+    },
+    "ZoneInstance": {
+      "title": "ZoneInstance",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "title": "Type",
+          "type": "string"
+        },
+        "of_deck": {
+          "title": "Of Deck",
+          "type": "string"
+        },
+        "per_player": {
+          "title": "Per Player",
+          "default": false,
+          "type": "boolean"
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "VariableInstance": {
+      "title": "VariableInstance",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "per_player": {
+          "title": "Per Player",
+          "default": false,
+          "type": "boolean"
+        },
+        "initial_value": {
+          "title": "Initial Value"
+        },
+        "computed": {
+          "title": "Computed"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "Components": {
+      "title": "Components",
+      "type": "object",
+      "properties": {
+        "component_types": {
+          "title": "Component Types",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/definitions/ComponentTypeDef"
+            }
+          }
+        },
+        "decks": {
+          "title": "Decks",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/DeckInstance"
+          }
+        },
+        "zones": {
+          "title": "Zones",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ZoneInstance"
+          }
+        },
+        "variables": {
+          "title": "Variables",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VariableInstance"
+          }
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      }
+    },
+    "Action": {
+      "title": "Action",
+      "type": "object",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "params": {
+          "title": "Params",
+          "type": "object"
+        },
+        "from": {
+          "title": "From"
+        },
+        "from_deck": {
+          "title": "From Deck",
+          "type": "string"
+        },
+        "to": {
+          "title": "To"
+        },
+        "target": {
+          "title": "Target"
+        },
+        "player": {
+          "title": "Player"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "store_as": {
+          "title": "Store As",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        },
+        "condition": {
+          "title": "Condition"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "StateDef": {
+      "title": "StateDef",
+      "type": "object",
+      "properties": {
+        "phases": {
+          "title": "Phases",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      }
+    },
+    "Transition": {
+      "title": "Transition",
+      "type": "object",
+      "properties": {
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        },
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ]
+    },
+    "Flow": {
+      "title": "Flow",
+      "type": "object",
+      "properties": {
+        "states": {
+          "title": "States",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/StateDef"
+          }
+        },
+        "initial_state": {
+          "title": "Initial State",
+          "type": "string"
+        },
+        "player_order": {
+          "title": "Player Order",
+          "type": "string"
+        },
+        "transitions": {
+          "title": "Transitions",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Transition"
+          }
+        },
+        "win_condition": {
+          "title": "Win Condition",
+          "type": "object"
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "states",
+        "initial_state",
+        "player_order"
+      ]
+    },
+    "EffectAction": {
+      "title": "EffectAction",
+      "type": "object",
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "params": {
+          "title": "Params",
+          "type": "object"
+        },
+        "from": {
+          "title": "From"
+        },
+        "to": {
+          "title": "To"
+        },
+        "player": {
+          "title": "Player"
+        },
+        "target": {
+          "title": "Target"
+        },
+        "count": {
+          "title": "Count",
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "object"
+            }
+          ]
+        },
+        "filter": {
+          "title": "Filter",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "store_as": {
+          "title": "Store As",
+          "type": "string"
+        },
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "state": {
+          "title": "State",
+          "type": "string"
+        },
+        "players": {
+          "title": "Players",
+          "type": "string"
+        },
+        "order": {
+          "title": "Order",
+          "type": "string"
+        },
+        "do": {
+          "title": "Do",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EffectAction"
+          }
+        },
+        "options": {
+          "title": "Options",
+          "type": "object"
+        },
+        "property": {
+          "title": "Property",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "Rule": {
+      "title": "Rule",
+      "type": "object",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "trigger": {
+          "title": "Trigger",
+          "type": "string"
+        },
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "effect": {
+          "title": "Effect",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EffectAction"
+          }
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "meta": {
+          "title": "Meta",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "trigger"
+      ]
+    }
+  }
+}
