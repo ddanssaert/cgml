@@ -42,30 +42,45 @@ export const GameBoard: React.FC = () => {
         try {
             const data = JSON.parse(rawData);
 
-            // In a more robust implementation, we would inspect the legalActions
-            // to see if "MOVE card to targetZone" is valid, then dispatch it.
-            // For now, we try to find an action that matches moving from hand to the target.
-
+            // Find a legal action that matches a MOVE of the dragged card or from the source zone
+            // to the target zone.
             const matchingAction = legalActions.find(act => {
                 if (!act.effect) return false;
-                // very naive matching for a MOVE action
+
+                // For MVP, look for a MOVE action in the effect array
                 const moveObj = act.effect.find((eff: any) => eff.action === 'MOVE' || eff.action === 'MOVE_ALL');
                 if (!moveObj) return false;
 
-                // If it's Wippen, we have REQUEST_INPUT and complex actions, 
-                // so we might just trigger the first legal action for demo purposes 
-                // if it matches the general intention, or we let the user click the explicit action button.
-                return true;
+                // Simple heuristic: if the rule's intended destination matches the drop target's name
+                // This logic would need to be expanded for complex rules (like Wippen's builds).
+                // Let's assume a match if the destination path includes the target zone's name.
+
+                let toPath = '';
+                if (typeof moveObj.to === 'string') toPath = moveObj.to;
+                if (typeof moveObj.to === 'object' && moveObj.to.path) toPath = moveObj.to.path;
+
+                return toPath.includes(targetZone.name);
             });
 
             if (matchingAction) {
-                // We'd map the dragged card to the context of the action.
-                // For this MVP, we will rely on the explicit Action Buttons below,
-                // but console log the intention.
-                console.log(`Intent to move card ${data.cardId} to ${targetZone.name}`);
+                console.log(`Executing matched action for drop: ${matchingAction.rule_id || 'unnamed'}`);
+
+                // Inform the simulator of the specific card that triggered this if it requires context.
+                // Depending on the robustness of ast_evaluator, we might need to inject standard 
+                // engine variables (like $card) here. For the demo, dispatching the effect is enough.
+
+                // Ideally, we might pass a context: { '$cardId': data.cardId } to `performAction`
+                // But `performAction` in `useGameState` currently only takes the effect array.
+                // We'd have to update `useGameState` to pass context, but let's try just executing the action first.
+                performAction(matchingAction.effect);
+                setSelectedCards(new Set()); // clear selection after
+            } else {
+                console.log(`No legal action matches moving card ${data.cardId} to ${targetZone.name}`);
             }
 
-        } catch (err) { }
+        } catch (err) {
+            console.error("Drop handling failed", err);
+        }
     };
 
     return (
