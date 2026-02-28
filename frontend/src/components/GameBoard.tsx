@@ -60,14 +60,29 @@ export const GameBoard: React.FC = () => {
             if (matchingAction) {
                 console.log(`Executing matched action for drop: ${matchingAction.rule_id || 'unnamed'}`);
 
-                // Inform the simulator of the specific card that triggered this if it requires context.
-                // Depending on the robustness of ast_evaluator, we might need to inject standard 
-                // engine variables (like $card) here. For the demo, dispatching the effect is enough.
+                // Locate the specific card being dragged
+                let cardObj: CardModel | undefined;
+                const searchZones = [
+                    ...Object.values(gameState.shared_zones),
+                    ...gameState.players.flatMap(p => Object.values(p.zones))
+                ];
+                for (const z of searchZones as ZoneModel[]) {
+                    if (z.id === data.zoneId || z.name === data.zoneId) {
+                        cardObj = z.cards.find((c: CardModel) => c.id === data.cardId);
+                        if (cardObj) break;
+                    }
+                }
 
-                // Ideally, we might pass a context: { '$cardId': data.cardId } to `performAction`
-                // But `performAction` in `useGameState` currently only takes the effect array.
-                // We'd have to update `useGameState` to pass context, but let's try just executing the action first.
-                performAction(matchingAction.effect);
+                if (cardObj) {
+                    // Inject a precise MOVE action overriding standard rule to respect drag-and-drop specificity
+                    performAction([{
+                        action: 'MOVE',
+                        from: cardObj,
+                        to: targetZone
+                    }]);
+                } else {
+                    performAction(matchingAction.effect);
+                }
                 setSelectedCards(new Set()); // clear selection after
             } else {
                 console.log(`No legal action matches moving card ${data.cardId} to ${targetZone.name}`);
