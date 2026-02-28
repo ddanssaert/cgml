@@ -4,16 +4,16 @@ import { GameBoard } from './components/GameBoard';
 
 // Default YAML to load for demo.
 const DEFAULT_GAME_YAML = `
-# yaml-language-server: $schema=./cgml.schema.json
-cgml_version: "1.3"
+cgml_version: 1.3
+name: High Card Duel
 meta:
   name: "High Card Duel"
-  author: "Traditional"
-  description: "Each round both players flip one card; higher card takes the trick."
+  author: "David"
+  version: "1.0"
   players:
     min: 2
     max: 2
-
+description: "Each round both players flip one card; higher card takes the trick."
 components:
   component_types:
     deck_types:
@@ -21,46 +21,43 @@ components:
         composition:
           - type: template
             template: standard_suits
-            values: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
-        rank_hierarchy: [2,3,4,5,6,7,8,9,10,J,Q,K,A]
-    zone_types:
-      draw_pile:
-        ordering: shuffled
-        visibility: { all: count_only }
-      play_pile:
-        ordering: lifo
-        visibility: { all: all }
-      winnings_pile:
-        ordering: fifo
-        visibility: { all: hidden }
+            values: [2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K, A]
+        rank_hierarchy: [2, 3, 4, 5, 6, 7, 8, 9, 10, J, Q, K, A]
+  zone_types:
+    draw_pile:
+      ordering: shuffled
+      visibility: { all: count_only }
+    play_pile:
+      ordering: lifo
+      visibility: { all: all }
+    winnings_pile:
+      ordering: fifo
+      visibility: { all: hidden }
 
-  decks:
-    main_deck:
-      type: standard_52
+decks:
+  main_deck:
+    type: standard_52
 
-  zones:
-    - name: deck
-      type: draw_pile
-      of_deck: main_deck
-    - name: player_deck
-      type: draw_pile
-      per_player: true
-    - name: play_area
-      type: play_pile
-      per_player: true
-    - name: winnings
-      type: winnings_pile
-      per_player: true
+zones:
+  - name: deck
+    type: draw_pile
+    of_deck: main_deck
+  - name: player_deck
+    type: draw_pile
+    per_player: true
+  - name: play_area
+    type: play_pile
+    per_player: true
+  - name: winnings
+    type: winnings_pile
+    per_player: true
 
 setup:
   - action: SHUFFLE
-    target:
-      path: "$.zones.deck"
+    target: "$.zones.deck"
   - action: DEAL_ALL
-    from:
-      path: "$.zones.deck"
-    to:
-      path: "$.players[*].zones.player_deck"
+    from: "$.zones.deck"
+    to: "$.players[*].zones.player_deck"
 
 flow:
   states:
@@ -74,18 +71,7 @@ flow:
   transitions:
     - from: Playing
       to: GameOver
-      condition:
-        and:
-          - isEqual:
-              - add:
-                  - count: [ { path: "$.players[0].zones.player_deck" } ]
-                  - count: [ { path: "$.players[0].zones.play_area" } ]
-              - value: 0
-          - isEqual:
-              - add:
-                  - count: [ { path: "$.players[1].zones.player_deck" } ]
-                  - count: [ { path: "$.players[1].zones.play_area" } ]
-              - value: 0
+      condition: "count($.players[0].zones.player_deck) + count($.players[0].zones.play_area) == 0 and count($.players[1].zones.player_deck) + count($.players[1].zones.play_area) == 0"
 
   win_condition:
     description: "Most cards in winnings wins"
@@ -99,116 +85,49 @@ rules:
   - id: flip_cards
     trigger: on.phase.FlipCard
     # Require both to have at least 1 card to flip
-    condition:
-      and:
-        - isGreaterThan:
-            - count: [ { path: "$.players[0].zones.player_deck" } ]
-            - value: 0
-        - isGreaterThan:
-            - count: [ { path: "$.players[1].zones.player_deck" } ]
-            - value: 0
+    condition: "count($.players[0].zones.player_deck) > 0 and count($.players[1].zones.player_deck) > 0"
     effect:
       # Using two explicit MOVE actions avoids reliance on FOR_EACH_PLAYER
       - action: MOVE
-        from:
-          top:
-            - path: "$.players[0].zones.player_deck"
-        to:
-          path: "$.players[0].zones.play_area"
+        from: "top($.players[0].zones.player_deck)"
+        to: "$.players[0].zones.play_area"
       - action: MOVE
-        from:
-          top:
-            - path: "$.players[1].zones.player_deck"
-        to:
-          path: "$.players[1].zones.play_area"
+        from: "top($.players[1].zones.player_deck)"
+        to: "$.players[1].zones.play_area"
 
   - id: compare_p1_wins
     trigger: on.phase.Compare
-    condition:
-      and:
-        - isGreaterThan:
-            - count: [ { path: "$.players[0].zones.play_area" } ]
-            - value: 0
-        - isGreaterThan:
-            - count: [ { path: "$.players[1].zones.play_area" } ]
-            - value: 0
-        - isGreaterThan:
-            - rank_value:
-                - top:
-                    - path: "$.players[0].zones.play_area"
-            - rank_value:
-                - top:
-                    - path: "$.players[1].zones.play_area"
+    condition: "count($.players[0].zones.play_area) > 0 and count($.players[1].zones.play_area) > 0 and rank_value(top($.players[0].zones.play_area)) > rank_value(top($.players[1].zones.play_area))"
     effect:
       - action: MOVE_ALL
-        from:
-          path: "$.players[0].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[0].zones.play_area"
+        to: "$.players[0].zones.winnings"
       - action: MOVE_ALL
-        from:
-          path: "$.players[1].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[1].zones.play_area"
+        to: "$.players[0].zones.winnings"
 
   - id: compare_p2_wins
     trigger: on.phase.Compare
-    condition:
-      and:
-        - isGreaterThan:
-            - count: [ { path: "$.players[0].zones.play_area" } ]
-            - value: 0
-        - isGreaterThan:
-            - count: [ { path: "$.players[1].zones.play_area" } ]
-            - value: 0
-        - isGreaterThan:
-            - rank_value:
-                - top:
-                    - path: "$.players[1].zones.play_area"
-            - rank_value:
-                - top:
-                    - path: "$.players[0].zones.play_area"
+    condition: "count($.players[0].zones.play_area) > 0 and count($.players[1].zones.play_area) > 0 and rank_value(top($.players[1].zones.play_area)) > rank_value(top($.players[0].zones.play_area))"
     effect:
       - action: MOVE_ALL
-        from:
-          path: "$.players[0].zones.play_area"
-        to:
-          path: "$.players[1].zones.winnings"
+        from: "$.players[0].zones.play_area"
+        to: "$.players[1].zones.winnings"
       - action: MOVE_ALL
-        from:
-          path: "$.players[1].zones.play_area"
-        to:
-          path: "$.players[1].zones.winnings"
+        from: "$.players[1].zones.play_area"
+        to: "$.players[1].zones.winnings"
 
   - id: compare_tie_deterministic
     trigger: on.phase.Compare
-    condition:
-      and:
-        - isGreaterThan:
-            - count: [ { path: "$.players[0].zones.play_area" } ]
-            - value: 0
-        - isGreaterThan:
-            - count: [ { path: "$.players[1].zones.play_area" } ]
-            - value: 0
-        - isEqual:
-            - rank_value:
-                - top:
-                    - path: "$.players[0].zones.play_area"
-            - rank_value:
-                - top:
-                    - path: "$.players[1].zones.play_area"
+    condition: "count($.players[0].zones.play_area) > 0 and count($.players[1].zones.play_area) > 0 and rank_value(top($.players[0].zones.play_area)) == rank_value(top($.players[1].zones.play_area))"
     effect:
       # Deterministic seat-order tie-breaker (player 0)
       - action: MOVE_ALL
-        from:
-          path: "$.players[0].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[0].zones.play_area"
+        to: "$.players[0].zones.winnings"
       - action: MOVE_ALL
-        from:
-          path: "$.players[1].zones.play_area"
-        to:
-          path: "$.players[0].zones.winnings"
+        from: "$.players[1].zones.play_area"
+        to: "$.players[0].zones.winnings"
 
 `;
 

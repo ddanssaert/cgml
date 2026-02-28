@@ -44,6 +44,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
             try {
                 // Simplified loading without !include for browser.
                 const parsedDef = yaml.load(yamlContent);
+                console.log("[DEBUG CGML] raw yaml length:", yamlContent.length);
+                console.log("[DEBUG CGML] parsedDef keys:", parsedDef ? Object.keys(parsedDef) : null);
+                console.log("[DEBUG CGML] parsed zones:", (parsedDef as any)?.zones);
                 const sim = new GameSimulator(parsedDef as any, playerCount);
                 setSimulator(sim);
                 updateReactState(sim);

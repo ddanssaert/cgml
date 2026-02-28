@@ -89,7 +89,8 @@ export function buildGameStateFromCgml(cgml: any, playerCountOverride?: number):
     const deckTypes = cgml.components?.component_types?.deck_types || {};
     const decks: Record<string, Card[]> = {};
 
-    for (const [deckName, deckDef] of Object.entries(cgml.components?.decks || {})) {
+    const rawDecks = cgml.decks || cgml.components?.decks || {};
+    for (const [deckName, deckDef] of Object.entries(rawDecks)) {
         const deckTypeDef = deckTypes[(deckDef as any).type] || {};
         decks[deckName] = createDeck(deckDef, deckTypeDef);
     }
@@ -97,7 +98,7 @@ export function buildGameStateFromCgml(cgml: any, playerCountOverride?: number):
     const playerCount = playerCountOverride || cgml.meta.players.max;
     const players: Player[] = [];
 
-    const varDefs = cgml.components?.variables || [];
+    const varDefs = cgml.variables || cgml.components?.variables || [];
     const perPlayerVars: Record<string, any> = {};
     const sharedVars: Record<string, any> = {};
 
@@ -106,7 +107,7 @@ export function buildGameStateFromCgml(cgml: any, playerCountOverride?: number):
         else sharedVars[v.name] = v.initial_value;
     }
 
-    const zoneDefs = cgml.components?.zones || [];
+    const zoneDefs = cgml.zones || cgml.components?.zones || [];
     const sharedZones: Record<string, Zone> = {};
 
     const perPlayerZoneDefs = zoneDefs.filter((z: any) => z.per_player);
@@ -207,7 +208,12 @@ export function findZone(state: GameState, zonePath: string | Zone, playerContex
                 current = current[idx];
             }
         }
-        if (current instanceof Zone) return current;
+        const isObj = current && typeof current === 'object';
+        const hasCardsArr = isObj && Array.isArray(current.cards);
+        if (isObj && hasCardsArr) return current;
+        console.error("findZone duck typing failed! isObj:", isObj, "hasCardsArr:", hasCardsArr, "current.cards type:", isObj ? typeof current.cards : 'N/A', "is Array?", isObj ? Array.isArray(current.cards) : false);
+        console.error("findZone failed! current:", current, "Is array?", Array.isArray(current), "Keys?", current ? Object.keys(current) : "null");
+        console.error("state.shared_zones:", Object.keys(state.shared_zones));
         throw new Error(`Path '${zonePath}' does not resolve to a Zone`);
     }
 
