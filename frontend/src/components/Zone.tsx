@@ -48,9 +48,6 @@ export const Zone: React.FC<ZoneProps> = ({
             const topCard = zone.cards[zone.cards.length - 1];
             return (
                 <div style={{ position: 'relative' }}>
-                    {/* Fake thickness */}
-                    {zone.cards.length > 1 && <div className="card" style={{ position: 'absolute', top: 4, left: 4, opacity: 0.5, zIndex: 0 }} />}
-                    {zone.cards.length > 2 && <div className="card" style={{ position: 'absolute', top: 8, left: 8, opacity: 0.3, zIndex: 0 }} />}
                     <div style={{ zIndex: 1, position: 'relative' }}>
                         <Card
                             card={topCard}
@@ -79,13 +76,15 @@ export const Zone: React.FC<ZoneProps> = ({
         ));
     };
 
+    const title = (zone as any).owner !== undefined && (zone as any).owner !== null ? `Player ${(zone as any).owner + 1} ${zone.name}` : zone.name;
+
     return (
         <div
             className={`zone glass layout-${layout}`}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
         >
-            <div className="zone-title">{zone.name}</div>
+            <div className="zone-title">{title}</div>
             {renderCards()}
         </div>
     );

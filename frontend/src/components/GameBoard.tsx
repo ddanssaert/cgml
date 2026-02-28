@@ -25,7 +25,8 @@ export const GameBoard: React.FC = () => {
     };
 
     const handleDragStart = (e: React.DragEvent, card: CardModel, fromZone: ZoneModel) => {
-        e.dataTransfer.setData('text/plain', JSON.stringify({ cardId: card.id, zoneId: fromZone.id || fromZone.name }));
+        const z: any = fromZone;
+        e.dataTransfer.setData('text/plain', JSON.stringify({ cardId: card.id, zoneId: fromZone.id || fromZone.name, zoneOwner: z.owner }));
         // Also select the card so visual feedback is consistent
         setSelectedCards(new Set([card.id]));
     };
@@ -73,7 +74,24 @@ export const GameBoard: React.FC = () => {
                     }
                 }
 
-                if (cardObj) {
+                if (cardObj && Array.isArray(matchingAction.effect)) {
+                    // Replace the generic rule effects with a copy, but modify any MOVE that originates
+                    // from the same zone/player as our dragged card to explicitly target the dragged card.
+                    const newEffects = matchingAction.effect.map((eff: any) => {
+                        let fromPath = '';
+                        if (typeof eff.from === 'string') fromPath = eff.from;
+                        if (typeof eff.from === 'object' && eff.from.path) fromPath = eff.from.path;
+
+                        const matchesZoneName = data.zoneId && fromPath.includes(data.zoneId);
+                        const matchesOwner = data.zoneOwner !== undefined && data.zoneOwner !== null ? fromPath.includes(`players[${data.zoneOwner}]`) : true;
+
+                        if ((eff.action === 'MOVE' || eff.action === 'MOVE_ALL') && matchesZoneName && matchesOwner) {
+                            return { ...eff, from: cardObj };
+                        }
+                        return eff;
+                    });
+                    performAction(newEffects);
+                } else if (cardObj) {
                     // Inject a precise MOVE action overriding standard rule to respect drag-and-drop specificity
                     performAction([{
                         action: 'MOVE',
@@ -94,7 +112,11 @@ export const GameBoard: React.FC = () => {
     };
 
     // Centralize shared zones + any specific 'play_area' or 'table' zones from players
-    const tableZones: ZoneModel[] = Object.values(gameState.shared_zones);
+    const tableZones: ZoneModel[] = Object.values(gameState.shared_zones).filter((z: ZoneModel) => {
+        // Hide central decks that are empty
+        if (z.name.toLowerCase() === 'deck' && (!z.cards || z.cards.length === 0)) return false;
+        return true;
+    });
     const p1Zones: ZoneModel[] = [];
     const p2Zones: ZoneModel[] = [];
 
