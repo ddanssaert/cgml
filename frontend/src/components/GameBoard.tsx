@@ -163,7 +163,7 @@ export const GameBoard: React.FC = () => {
                                         key={idx}
                                         className="action-btn"
                                         onClick={() => {
-                                            performAction([action]);
+                                            performAction(action.effect);
                                             setSelectedCards(new Set());
                                         }}
                                     >
