@@ -35,14 +35,15 @@ export const Zone: React.FC<ZoneProps> = ({
     // For simplicity, we just render the top card or a stack representation if defined, 
     // but the engine currently relies on UI to decide visibility.
     // We'll render all cards for now, or a compact stacked view.
-    const isStacked = zone.name.toLowerCase() === 'deck' || zone.name.toLowerCase().includes('score') || zone.name.toLowerCase().includes('captured');
+    // Read the explicitly defined layout from the engine model, default to stack
+    const layout = (zone as any).layout || 'stack';
 
     const renderCards = () => {
         if (!zone.cards || zone.cards.length === 0) {
             return <div style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9rem' }}>Empty</div>
         }
 
-        if (isStacked) {
+        if (layout === 'stack') {
             // Render only the top card to simulate a deck/pile
             const topCard = zone.cards[zone.cards.length - 1];
             return (
@@ -78,11 +79,9 @@ export const Zone: React.FC<ZoneProps> = ({
         ));
     };
 
-    const isTable = zone.name.includes('table') || zone.name.includes('play_area');
-
     return (
         <div
-            className={`zone glass ${isTable ? 'table-zone' : ''}`}
+            className={`zone glass layout-${layout}`}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
         >

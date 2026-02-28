@@ -117,20 +117,127 @@ header h1 {
   color: #aaa;
 }
 
-.table-zone {
-  min-width: 150px;
-  padding: 2rem 1rem 1rem 1rem;
-  gap: -30px;
-  /* Slight fan effect for play areas */
+/* ======= Zone Layout Styles ======= */
+
+/* layout-stack: simulated physical deck */
+.layout-stack {
+  position: relative;
+  min-width: calc(var(--card-width) + 2rem);
   justify-content: center;
-  border: 1px solid rgba(252, 163, 17, 0.3);
-  /* Match theme secondary */
+  align-items: center;
 }
 
-/* Fan effect override for multiple cards on table */
-.table-zone .card-wrapper:nth-child(n+3) {
-  margin-left: -60px;
+.layout-stack .card-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
+
+/* layout-fan-horizontal: Hand mechanics */
+.layout-fan-horizontal {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem 2rem;
+}
+
+.layout-fan-horizontal .card-wrapper {
+  margin-left: -60px;
+  transition: transform 0.2s ease, z-index 0s;
+}
+
+.layout-fan-horizontal .card-wrapper:first-child {
+  margin-left: 0;
+}
+
+.layout-fan-horizontal .card-wrapper:hover {
+  transform: translateY(-20px) scale(1.05);
+  z-index: 100 !important;
+}
+
+/* layout-fan-vertical: Solitaire cascades */
+.layout-fan-vertical {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding-bottom: calc(var(--card-height) + 1rem);
+}
+
+.layout-fan-vertical .card-wrapper {
+  margin-top: -90px;
+  transition: transform 0.2s ease;
+}
+
+.layout-fan-vertical .card-wrapper:first-child {
+  margin-top: 0;
+}
+
+.layout-fan-vertical .card-wrapper:hover {
+  transform: scale(1.05);
+  z-index: 100 !important;
+}
+
+/* layout-spread-row: side-by-side */
+.layout-spread-row {
+  flex-direction: row;
+  justify-content: center;
+  gap: 15px;
+  padding: 1rem;
+}
+
+/* layout-spread-grid: 2D flow */
+.layout-spread-grid {
+  justify-content: center;
+  gap: 15px;
+  padding: 1rem;
+}
+
+/* layout-scatter: Messy pile */
+.layout-scatter {
+  position: relative;
+  min-width: calc(var(--card-width) * 1.8);
+  min-height: calc(var(--card-height) * 1.5);
+  justify-content: center;
+  align-items: center;
+}
+
+.layout-scatter .card-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transition: transform 0.2s ease;
+}
+
+.layout-scatter .card-wrapper:hover {
+  z-index: 100 !important;
+}
+
+/* Heuristics for a beautifully messy pile effect */
+.layout-scatter .card-wrapper:nth-child(even) {
+  transform: translate(-45%, -55%) rotate(8deg);
+}
+
+.layout-scatter .card-wrapper:nth-child(odd) {
+  transform: translate(-55%, -45%) rotate(-6deg);
+}
+
+.layout-scatter .card-wrapper:nth-child(3n) {
+  transform: translate(-50%, -60%) rotate(12deg);
+}
+
+.layout-scatter .card-wrapper:nth-child(3n+1) {
+  transform: translate(-60%, -50%) rotate(-10deg);
+}
+
+.layout-scatter .card-wrapper:nth-child(4n) {
+  transform: translate(-40%, -40%) rotate(4deg);
+}
+
+.layout-scatter .card-wrapper:nth-child(5n) {
+  transform: translate(-50%, -50%) rotate(-15deg);
+}
+
 
 /* Card */
 .card-wrapper {

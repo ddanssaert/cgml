@@ -24,6 +24,7 @@ class ComponentTypeDef(BaseModel):
     composition: Optional[List[Any]] = None
     ordering: Optional[str] = None
     visibility: Optional[Dict[str, Any]] = None
+    layout: Optional[str] = None
     rank_hierarchy: Optional[List[Union[str, int]]] = None
 
 class DeckInstance(BaseModel):

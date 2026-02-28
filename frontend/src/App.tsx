@@ -27,12 +27,15 @@ components:
     draw_pile:
       ordering: shuffled
       visibility: { all: count_only }
+      layout: stack
     play_pile:
       ordering: lifo
       visibility: { all: all }
+      layout: spread_row
     winnings_pile:
       ordering: fifo
       visibility: { all: hidden }
+      layout: stack
 
 decks:
   main_deck:

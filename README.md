@@ -153,11 +153,12 @@ Defines reusable types and concrete instances.
   - `default_properties`: optional per-card defaults
 
 - `component_types.zone_types.<name>`
-  - `ordering`: `unordered | fifo | lifo | shuffled`
+  - `ordering`: `unordered | fifo | lifo | shuffled | manual`
   - `visibility`: controls who can see cards in the zone
     - `owner`: `all | count_only | hidden | top_card_only`
     - `others`: `all | count_only | hidden | top_card_only`
     - `all`: same options (applies to everyone)
+  - `layout`: UI presentation style divorcing rendering from logic (`stack | fan_horizontal | fan_vertical | spread_row | spread_grid | scatter`)
   - `default_face`: `up | down` (default: `up`)
   - `allows_reorder`: `true|false` (default: `false`)
 

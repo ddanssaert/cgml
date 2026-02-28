@@ -19,13 +19,15 @@ export class Zone {
     owner: number | null = null; // player id or null for shared
     ordering: string | null = null;
     visibility: Record<string, string> | null = null;
+    layout: string;
     cards: Card[] = [];
 
-    constructor(name: string, type: string, of_deck: string | null = null, owner: number | null = null) {
+    constructor(name: string, type: string, of_deck: string | null = null, owner: number | null = null, layout: string = 'stack') {
         this.name = name;
         this.type = type;
         this.of_deck = of_deck;
         this.owner = owner;
+        this.layout = layout;
     }
 
     get cardCount(): number {
@@ -112,20 +114,23 @@ export function buildGameStateFromCgml(cgml: any, playerCountOverride?: number):
 
     const perPlayerZoneDefs = zoneDefs.filter((z: any) => z.per_player);
     const sharedZoneDefs = zoneDefs.filter((z: any) => !z.per_player);
+    const zoneTypes = cgml.components?.component_types?.zone_types || cgml.component_types?.zone_types || {};
 
     for (let pidx = 0; pidx < playerCount; pidx++) {
         const pname = `Player ${pidx + 1}`;
         const player = new Player(pidx, pname);
         player.variables = { ...perPlayerVars };
         for (const zoneDef of perPlayerZoneDefs) {
-            const zone = new Zone(zoneDef.name, zoneDef.type, zoneDef.of_deck || null, pidx);
+            const zLayout = zoneTypes[zoneDef.type]?.layout || 'stack';
+            const zone = new Zone(zoneDef.name, zoneDef.type, zoneDef.of_deck || null, pidx, zLayout);
             player.zones[zone.name] = zone;
         }
         players.push(player);
     }
 
     for (const zoneDef of sharedZoneDefs) {
-        sharedZones[zoneDef.name] = new Zone(zoneDef.name, zoneDef.type, zoneDef.of_deck || null, null);
+        const zLayout = zoneTypes[zoneDef.type]?.layout || 'stack';
+        sharedZones[zoneDef.name] = new Zone(zoneDef.name, zoneDef.type, zoneDef.of_deck || null, null, zLayout);
     }
 
     const state = new GameState({
