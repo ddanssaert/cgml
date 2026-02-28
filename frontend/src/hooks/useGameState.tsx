@@ -1,7 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-// Assuming the ts project builds its dist with types or we can directly import the source if vite is configured to handle the symlink.
+import React, { createContext, useContext, useState, useCallback } from 'react';
+// Note: We're not dynamically loading YAML files in this demo implementation yet.
 import { GameSimulator } from 'cgml-engine/src/simulator';
-import { loadCgmlFile } from 'cgml-engine/src/loader';
 import { GameState } from 'cgml-engine/src/state';
 
 interface GameContextType {

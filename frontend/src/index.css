@@ -53,7 +53,7 @@ header {
   padding: 1rem;
   text-align: center;
   background: rgba(0, 0, 0, 0.3);
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-bottom: 1rem;
 }
 
@@ -117,6 +117,21 @@ header h1 {
   color: #aaa;
 }
 
+.table-zone {
+  min-width: 150px;
+  padding: 2rem 1rem 1rem 1rem;
+  gap: -30px;
+  /* Slight fan effect for play areas */
+  justify-content: center;
+  border: 1px solid rgba(252, 163, 17, 0.3);
+  /* Match theme secondary */
+}
+
+/* Fan effect override for multiple cards on table */
+.table-zone .card-wrapper:nth-child(n+3) {
+  margin-left: -60px;
+}
+
 /* Card */
 .card-wrapper {
   perspective: 1000px;
@@ -132,10 +147,11 @@ header h1 {
   width: var(--card-width);
   height: var(--card-height);
   border-radius: 8px;
-  background-color: white; /* fallback */
+  background-color: white;
+  /* fallback */
   background-size: cover;
   background-position: center;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   transition: transform var(--transition-speed), box-shadow var(--transition-speed);
   display: flex;
   align-items: center;
@@ -146,7 +162,7 @@ header h1 {
 
 .card-wrapper:hover .card {
   transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0,0,0,0.4), 0 0 10px rgba(252, 163, 17, 0.5);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4), 0 0 10px rgba(252, 163, 17, 0.5);
 }
 
 .card-wrapper.selected .card {
@@ -205,32 +221,32 @@ header h1 {
 }
 
 .controls {
-    display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
-    justify-content: center;
-    flex-wrap: wrap;
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .action-btn {
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    color: var(--text-primary);
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .action-btn:hover:not(:disabled) {
-    background: rgba(255,255,255,0.15);
-    border-color: var(--secondary-color);
-    box-shadow: 0 0 8px rgba(252, 163, 17, 0.3);
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--secondary-color);
+  box-shadow: 0 0 8px rgba(252, 163, 17, 0.3);
 }
 
 .action-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 /* Actions list */

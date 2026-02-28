@@ -78,9 +78,11 @@ export const Zone: React.FC<ZoneProps> = ({
         ));
     };
 
+    const isTable = zone.name.includes('table') || zone.name.includes('play_area');
+
     return (
         <div
-            className="zone glass"
+            className={`zone glass ${isTable ? 'table-zone' : ''}`}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
         >
