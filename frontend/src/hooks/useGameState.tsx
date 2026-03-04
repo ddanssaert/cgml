@@ -48,6 +48,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 console.log("[DEBUG CGML] parsedDef keys:", parsedDef ? Object.keys(parsedDef) : null);
                 console.log("[DEBUG CGML] parsed zones:", (parsedDef as any)?.zones);
                 const sim = new GameSimulator(parsedDef as any, playerCount);
+                console.log("[DEBUG ENGINE] Player 1 Deck Count after Setup:", sim.gameState.players[0].zones.player_deck.cards.length);
                 setSimulator(sim);
                 updateReactState(sim);
             } catch (e) {
